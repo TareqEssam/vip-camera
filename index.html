@@ -243,115 +243,201 @@ function zoomOut() {
 function resetFrame() { applyFrame(15, 22.5, 70, 55); }
 
 // ===== كشف المستند التلقائي (باستخدام OpenCV.js) =====
+// ===== كشف المستند التلقائي (محسّن) =====
 function autoDetectDocument() {
   if (!state.cvReady || typeof cv === 'undefined') {
     setStatus('⚠️ جاري تحميل مكتبة الكشف... انتظر لحظة.');
     return;
   }
   if (!state.stream) { setStatus('⚠️ الكاميرا غير نشطة.'); return; }
-  
+
   setStatus('📐 جاري تحليل المستند...');
   detectBtn.disabled = true;
-  
+
   try {
     var v = video;
     var canvas = document.createElement('canvas');
-    canvas.width = v.videoWidth;
-    canvas.height = v.videoHeight;
+    canvas.width = v.videoWidth || 1280;
+    canvas.height = v.videoHeight || 720;
     var ctx = canvas.getContext('2d');
     ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
-    
-    // 1. تحويل إلى صورة OpenCV
-    var src = cv.imread(canvas);
+
+    // 1. استخراج بيانات الصورة بشكل موثوق (بدلاً من cv.imread)
+    var imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    var src = cv.matFromImageData(imgData);
     var gray = new cv.Mat();
     cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
-    
-    // 2. تنعيم الصورة لتقليل الضوضاء
+
+    // 2. تحسين التباين باستخدام CLAHE (للتعامل مع الإضاءة غير المتجانسة)
+    var clahe = new cv.CLAHE(2.0, new cv.Size(8, 8));
+    var enhanced = new cv.Mat();
+    clahe.apply(gray, enhanced);
+    clahe.delete();
+
+    // 3. تنعيم خفيف لتقليل الضوضاء (بدون فقدان الحواف)
     var blurred = new cv.Mat();
-    cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0);
-    
-    // 3. كشف الحواف (Canny)
+    cv.GaussianBlur(enhanced, blurred, new cv.Size(5, 5), 0);
+
+    // 4. كشف الحواف Canny بعتبات متكيفة
     var edges = new cv.Mat();
-    cv.Canny(blurred, edges, 75, 200);
-    
-    // 4. إيجاد الكونتورات
+    var medVal = cv.mean(blurred)[0];
+    var lowerThresh = Math.max(30, medVal * 0.33);
+    var upperThresh = Math.min(255, medVal * 1.33);
+    cv.Canny(blurred, edges, lowerThresh, upperThresh);
+
+    // 5. عمليات Morphology لإغلاق الفجوات في الحواف
+    var kernel = cv.Mat.ones(5, 5, cv.CV_8U);
+    var closed = new cv.Mat();
+    cv.morphologyEx(edges, closed, cv.MORPH_CLOSE, kernel, new cv.Point(-1, -1), 2);
+
+    // 6. إيجاد الكونتورات (RETR_LIST للحصول على كل الكونتورات وليس الخارجية فقط)
     var contours = new cv.MatVector();
     var hierarchy = new cv.Mat();
-    cv.findContours(edges, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+    cv.findContours(closed, contours, hierarchy, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE);
+
+    var stageRect = stage.getBoundingClientRect();
+    var totalArea = canvas.width * canvas.height;
+    var minAreaPixels = totalArea * 0.03; // 3% بدلاً من 10%
+    var maxAreaPixels = totalArea * 0.95;
+
+    var candidates = [];
     
-    var maxArea = 0;
-    var bestContour = null;
-    var minAreaPixels = (canvas.width * canvas.height) * 0.10; // 10% من مساحة الشاشة
-    
-    // 5. البحث عن أكبر كونتور رباعي (أو قريب من 4 زوايا)
+    // 7. البحث عن أفضل الكونتورات
     for (var i = 0; i < contours.size(); i++) {
       var cnt = contours.get(i);
       var area = cv.contourArea(cnt);
-      if (area < minAreaPixels) continue;
       
-      // تقريب الكونتور لمضلع
+      // تجاهل الصغيرة جداً أو الكبيرة جداً
+      if (area < minAreaPixels || area > maxAreaPixels) {
+        cnt.delete();
+        continue;
+      }
+
       var perimeter = cv.arcLength(cnt, true);
+      if (perimeter < 100) {
+        cnt.delete();
+        continue;
+      }
+
+      // تقريب الكونتور — تسامح أكبر (0.05 بدلاً من 0.02)
       var approx = new cv.Mat();
-      cv.approxPolyDP(cnt, approx, 0.02 * perimeter, true);
+      cv.approxPolyDP(cnt, approx, 0.05 * perimeter, true);
+      var numPoints = approx.rows;
+
+      // حساب النسبة الباعية (Aspect Ratio) للمستطيل المحيط
+      var rect = cv.boundingRect(approx);
+      var aspectRatio = rect.width / Math.max(rect.height, 1);
+      var isReasonableShape = (aspectRatio > 0.15 && aspectRatio < 6.5);
+
+      // تقييم الجودة: كلما كانت النقاط أقرب لـ 4، كان أفضل
+      // score = مساحة كبيرة + قرب النقاط من 4 + شكل معقول
+      var shapeScore = 0;
+      if (numPoints >= 3 && numPoints <= 6) {
+        shapeScore = 1000 - Math.abs(numPoints - 4) * 200;
+      }
       
-      if (approx.rows === 4) { // وجدنا شكل رباعي (مستند)
-        if (area > maxArea) {
-          maxArea = area;
-          bestContour = approx.clone();
+      if (shapeScore > 0 && isReasonableShape) {
+        candidates.push({
+          area: area,
+          score: shapeScore + (area / totalArea) * 500,
+          approx: approx.clone(),
+          rect: rect,
+          numPoints: numPoints
+        });
+      }
+      
+      approx.delete();
+      cnt.delete();
+    }
+
+    // 8. ترتيب المرشحين حسب النقاط (الأعلى أولاً)
+    candidates.sort(function(a, b) { return b.score - a.score; });
+
+    var bestContour = null;
+    var bestRect = null;
+
+    if (candidates.length > 0) {
+      // خذ أفضل مرشح رباعي (أو قريب منه)
+      bestContour = candidates[0].approx;
+      bestRect = candidates[0].rect;
+      
+      // إذا كان لدينا بالضبط 4 نقاط، استخدمها لحساب أدق
+      if (candidates[0].numPoints === 4) {
+        // يمكن استخدام النقاط الأربع لاحقاً لـ perspective correction
+        // لكننا هنا نحتاج فقط المستطيل المحيط للإطار UI
+        bestRect = cv.boundingRect(bestContour);
+      }
+    } else {
+      // Fallback: لم نجد شكلاً رباعياً، خذ أكبر كونتور عام
+      var largestArea = 0;
+      var largestContour = null;
+      for (var j = 0; j < contours.size(); j++) {
+        var c = contours.get(j);
+        var a = cv.contourArea(c);
+        if (a > largestArea && a > minAreaPixels) {
+          largestArea = a;
+          if (largestContour) largestContour.delete();
+          largestContour = c.clone();
         }
       }
-      approx.delete();
+      if (largestContour) {
+        bestContour = largestContour;
+        bestRect = cv.boundingRect(bestContour);
+      }
     }
-    
+
     // تنظيف الذاكرة
-    src.delete(); gray.delete(); blurred.delete(); edges.delete(); contours.delete(); hierarchy.delete();
-    
-    if (!bestContour) {
-      setStatus('❌ لم يتم العثور على مستند واضح. حاول يدوياً.');
+    src.delete(); gray.delete(); enhanced.delete(); blurred.delete();
+    edges.delete(); kernel.delete(); closed.delete(); contours.delete(); hierarchy.delete();
+    for (var k = 0; k < candidates.length; k++) {
+      candidates[k].approx.delete();
+    }
+    if (bestContour && bestContour !== candidates[0]?.approx) {
+      // سيتم حذفه لاحقاً أو هو نفسه
+    }
+
+    if (!bestRect) {
+      setStatus('❌ لم يتم العثور على مستند واضح. جرب تقريب الكاميرا أو تحسين الإضاءة.');
       detectBtn.disabled = false;
       return;
     }
-    
-    // 6. حساب المستطيل المحيط (Bounding Box) حول الكونتور المكتشف
-    var rect = cv.boundingRect(bestContour);
-    bestContour.delete();
-    
-    // 7. تحويل إحداثيات المستطيل من حجم الفيديو الخام إلى نسبة مئوية بالنسبة لـ Stage
+
+    // 9. تحويل الإحداثيات إلى نسب مئوية
     var vw = canvas.width, vh = canvas.height;
-    var stageRect = stage.getBoundingClientRect();
     var scaleCover = Math.max(stageRect.width / vw, stageRect.height / vh);
     var dispW = vw * scaleCover;
     var dispH = vh * scaleCover;
     var offX = (stageRect.width - dispW) / 2;
     var offY = (stageRect.height - dispH) / 2;
-    
-    // حساب النسب المئوية
-    var leftP = ((rect.x * scaleCover) + offX) / stageRect.width * 100;
-    var topP = ((rect.y * scaleCover) + offY) / stageRect.height * 100;
-    var widthP = (rect.width * scaleCover) / stageRect.width * 100;
-    var heightP = (rect.height * scaleCover) / stageRect.height * 100;
-    
-    // هامش صغير حول المستند (3%) حتى لا يلتصق بالحافة تماماً
-    var margin = 1.5;
+
+    var leftP = ((bestRect.x * scaleCover) + offX) / stageRect.width * 100;
+    var topP = ((bestRect.y * scaleCover) + offY) / stageRect.height * 100;
+    var widthP = (bestRect.width * scaleCover) / stageRect.width * 100;
+    var heightP = (bestRect.height * scaleCover) / stageRect.height * 100;
+
+    // هامش صغير (2%)
+    var margin = 2.0;
     leftP = Math.max(0, leftP - margin);
     topP = Math.max(0, topP - margin);
     widthP = Math.min(100 - leftP, widthP + (margin * 2));
     heightP = Math.min(100 - topP, heightP + (margin * 2));
-    
-    // تأكد من الحد الأدنى
-    if (widthP < 15 || heightP < 15) {
-      setStatus('⚠️ المستند صغير جداً أو قريب جداً. قرب الهاتف.');
+
+    if (widthP < 10 || heightP < 10) {
+      setStatus('⚠️ المستند صغير جداً. قرب الهاتف قليلاً.');
       detectBtn.disabled = false;
+      if (bestContour) bestContour.delete();
       return;
     }
-    
-    // تطبيق الإطار الجديد
+
+    // تطبيق الإطار
     applyFrame(leftP, topP, widthP, heightP);
-    setStatus('✅ تم ضبط الإطار على المستند! عدّل يدوياً إن لزم.');
+    setStatus('✅ تم ضبط الإطار! عدّل يدوياً إن لزم.');
     noteEl.textContent = 'الإطار تم ضبطه تلقائياً. استخدم المقابض للدقة المطلقة.';
-    
+
+    if (bestContour) bestContour.delete();
+
   } catch (err) {
-    setStatus('⚠️ خطأ في الكشف: ' + err.message);
+    setStatus('⚠️ خطأ في الكشف: ' + (err.message || err));
     console.error(err);
   }
   detectBtn.disabled = false;
