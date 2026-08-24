@@ -4,33 +4,32 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
 <title>تصوير الإيصال - كشف تلقائي</title>
-<!-- تحميل مكتبة OpenCV.js من المصدر الرسمي (خوارزميات رياضية، ليست ذكاء اصطناعي) -->
+<!-- تحميل مكتبة OpenCV.js من المصدر الرسمي -->
 <script async src="https://docs.opencv.org/4.9.0/opencv.js" onload="onOpenCvReady()" type="text/javascript"></script>
 <style>
-  :root{--primary:#4f46a5;--line:#e4e7ec}
+  :root{--primary:#4f46a5;--line:#e4e7ec;--success:#10b981;--danger:#ef4444;--warning:#f59e0b}
   *{box-sizing:border-box; user-select:none; -webkit-touch-callout:none; -webkit-user-select:none;}
   html,body{height:100%;margin:0;background:#05070a;font-family:-apple-system,'Segoe UI',Tahoma,Arial,sans-serif; overflow:hidden; touch-action:none;}
   .card{height:100dvh;display:flex;flex-direction:column;background:#05070a}
   .head{padding:12px 14px;background:#fff;border-bottom:1px solid var(--line); flex-shrink:0;}
   .head strong{display:block;font-size:14px;color:#1d2433}
   .head small{display:block;color:#667085;font-size:11px;margin-top:3px}
-  
+
   .stage{position:relative;flex:1;min-height:0;background:#05070a;overflow:hidden; touch-action:none;}
   video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;z-index:1; pointer-events:none;}
   img.review{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000;display:none;z-index:2; pointer-events:auto;}
-  
+
   .frame {
     position:absolute; z-index:3;
     border:3px solid rgba(255,255,255,.95); border-radius:14px;
     box-shadow:0 0 0 9999px rgba(0,0,0,.36);
     pointer-events:none; touch-action:none;
     min-width: 50px; min-height: 50px;
-    transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1); /* حركة انسيابية عند الضبط التلقائي */
+    transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
   }
   .frame.initial { width: 70%; height: 55%; top: 22.5%; left: 15%; }
   .frame.hidden{display:none}
-  
-  /* المقابض */
+
   .handle {
     position:absolute; width: 44px; height: 44px;
     background: rgba(255, 255, 255, 0.95); border: 3px solid var(--primary); border-radius: 50%;
@@ -42,7 +41,7 @@
   }
   .handle:active { transform: scale(1.2); background: #fff; }
   .handle::before { content: ''; position:absolute; inset: -12px; border-radius: 50%; background: transparent; z-index:-1; }
-  
+
   .handle-n { top: -22px; left: 50%; transform: translateX(-50%); cursor: ns-resize; }
   .handle-s { bottom: -22px; left: 50%; transform: translateX(-50%); cursor: ns-resize; }
   .handle-e { right: -22px; top: 50%; transform: translateY(-50%); cursor: ew-resize; }
@@ -51,7 +50,7 @@
   .handle-nw { top: -22px; left: -22px; cursor: nwse-resize; }
   .handle-se { bottom: -22px; right: -22px; cursor: nwse-resize; }
   .handle-sw { bottom: -22px; left: -22px; cursor: nesw-resize; }
-  
+
   .handle-move {
     top: 50%; left: 50%; transform: translate(-50%, -50%);
     width: 60px; height: 60px; background: rgba(79, 70, 165, 0.25);
@@ -73,19 +72,20 @@
 
   .status{position:absolute;top:10px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.7);color:#fff;font-size:12px;padding:8px 16px;border-radius:999px;z-index:15; white-space:nowrap; pointer-events:none; backdrop-filter:blur(4px);}
   .note{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);width:min(90%,560px);text-align:center;background:rgba(0,0,0,.7);color:#fff;border-radius:12px;padding:10px 14px;font-size:12px;line-height:1.7;z-index:15; pointer-events:none; backdrop-filter:blur(4px);}
-  
+
   .actions{
     display:flex; gap:6px; padding:10px 12px; background:#fff; flex-shrink:0; flex-wrap:wrap; align-items:center; justify-content:center;
   }
   .btn{
-    border:none; border-radius:12px; padding:12px 12px; font-size:12px; font-weight:700; cursor:pointer;
-    min-width:50px; flex:1 1 auto; transition: all 0.15s; white-space:nowrap;
+    border:none; border-radius:12px; padding:12px 10px; font-size:12px; font-weight:700; cursor:pointer;
+    min-width:48px; flex:1 1 auto; transition: all 0.15s; white-space:nowrap;
   }
   .btn:active { transform: scale(0.95); }
   .btn-primary{background:var(--primary);color:#fff}
   .btn-secondary{background:#f2f3f8;color:#344054}
-  .btn-zoom{background:#e0e7ff;color:#1e293b; flex:0.4; min-width:40px; padding:12px 6px;}
-  .btn-detect{background:#10b981;color:#fff; flex:0.8;}
+  .btn-zoom{background:#e0e7ff;color:#1e293b; flex:0.35; min-width:36px; padding:12px 4px;}
+  .btn-detect{background:var(--success);color:#fff; flex:0.8;}
+  .btn-detect.active{background:var(--warning);color:#fff;}
   .btn:disabled{opacity:.5;pointer-events:none}
 
   .stage.is-review .frame, 
@@ -94,12 +94,13 @@
   .stage.is-review .review { display: block !important; }
   .stage.is-review video { display: none !important; }
 </style>
+<base target="_blank">
 </head>
 <body>
 <div class="card">
   <div class="head">
     <strong>📄 ضبط تلقائي أو يدوي</strong>
-    <small>اضغط "كشف المستند" ليقفز الإطار على الورقة، ثم اضبطه بدقة.</small>
+    <small>اضغط "كشف المستند" ليقفز الإطار على الورقة، أو فعّل الكشف المستمر.</small>
   </div>
   <div class="stage" id="stage">
     <video id="video" playsinline webkit-playsinline muted autoplay></video>
@@ -119,11 +120,12 @@
     <div class="status" id="status">جاري تشغيل الكاميرا...</div>
     <div class="note" id="note">اسحب النقاط أو المنتصف، أو استخدم الكشف التلقائي.</div>
   </div>
-  
+
   <div class="actions">
     <button type="button" class="btn btn-secondary" id="switchBtn">🔄 تبديل</button>
     <button type="button" class="btn btn-secondary" id="resetBtn">↺ إعادة</button>
     <button type="button" class="btn btn-detect" id="detectBtn">📐 كشف المستند</button>
+    <button type="button" class="btn btn-detect" id="autoDetectBtn">🔄 كشف مستمر</button>
     <button type="button" class="btn btn-zoom" id="zoomOutBtn">➖</button>
     <button type="button" class="btn btn-zoom" id="zoomInBtn">➕</button>
     <button type="button" class="btn btn-primary" id="captureBtn" disabled>📸 قص</button>
@@ -133,7 +135,15 @@
 <script>
 // ===== الإعدادات =====
 var APP_TAG='sms-vip-camera';
-var state={stream:null,facing:'environment',reviewData:null, cvReady:false};
+var state={
+  stream:null,
+  facing:'environment',
+  reviewData:null,
+  cvReady:false,
+  autoDetectInterval:null,
+  isAutoDetecting:false,
+  lastDetectTime:0
+};
 var video=document.getElementById('video');
 var frame=document.getElementById('frame');
 var stage=document.getElementById('stage');
@@ -145,16 +155,18 @@ var switchBtn=document.getElementById('switchBtn');
 var closeBtn=document.getElementById('closeBtn');
 var resetBtn=document.getElementById('resetBtn');
 var detectBtn=document.getElementById('detectBtn');
+var autoDetectBtn=document.getElementById('autoDetectBtn');
 
 function setStatus(t){ statusEl.textContent=t||''; }
 
 function onOpenCvReady() {
   state.cvReady = true;
-  setStatus('cv جاهز - يمكنك استخدام الكشف التلقائي');
+  setStatus('✅ OpenCV جاهز — يمكنك استخدام الكشف التلقائي');
   detectBtn.disabled = false;
+  autoDetectBtn.disabled = false;
 }
 
-// ===== منطق السحب (نفس السابق مع إضافة الـ Move) =====
+// ===== منطق السحب (Drag) =====
 var dragState = null;
 function getPos(e) {
   if (e.touches) return { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY };
@@ -193,7 +205,6 @@ function moveDrag(e) {
     newTop = Math.max(0, Math.min(100 - newHeight, dragState.startTop + dy));
     applyFrame(newLeft, newTop, newWidth, newHeight); return;
   }
-  // تغيير الحجم
   if (h === 'se') { newWidth = Math.min(max, Math.max(min, dragState.startWidth + dx)); newHeight = Math.min(max, Math.max(min, dragState.startHeight + dy)); }
   else if (h === 'nw') { newLeft = Math.min(dragState.startLeft + dragState.startWidth - min, Math.max(0, dragState.startLeft + dx)); newWidth = Math.min(max, Math.max(min, dragState.startWidth - dx)); newTop = Math.min(dragState.startTop + dragState.startHeight - min, Math.max(0, dragState.startTop + dy)); newHeight = Math.min(max, Math.max(min, dragState.startHeight - dy)); }
   else if (h === 'ne') { newWidth = Math.min(max, Math.max(min, dragState.startWidth + dx)); newTop = Math.min(dragState.startTop + dragState.startHeight - min, Math.max(0, dragState.startTop + dy)); newHeight = Math.min(max, Math.max(min, dragState.startHeight - dy)); }
@@ -242,133 +253,144 @@ function zoomOut() {
 }
 function resetFrame() { applyFrame(15, 22.5, 70, 55); }
 
-// ===== كشف المستند التلقائي (باستخدام OpenCV.js) =====
-// ===== كشف المستند التلقائي (محسّن) =====
-function autoDetectDocument() {
+// ===== كشف المستند التلقائي (محسّن بالكامل) =====
+function autoDetectDocument(silent) {
   if (!state.cvReady || typeof cv === 'undefined') {
-    setStatus('⚠️ جاري تحميل مكتبة الكشف... انتظر لحظة.');
+    if (!silent) setStatus('⚠️ جاري تحميل مكتبة الكشف... انتظر لحظة.');
     return;
   }
-  if (!state.stream) { setStatus('⚠️ الكاميرا غير نشطة.'); return; }
+  if (!state.stream) {
+    if (!silent) setStatus('⚠️ الكاميرا غير نشطة.');
+    return;
+  }
+  if (state.reviewData) return;
 
-  setStatus('📐 جاري تحليل المستند...');
-  detectBtn.disabled = true;
+  // منع التشغيل المتكرر السريع
+  var now = Date.now();
+  if (now - state.lastDetectTime < 500) return;
+  state.lastDetectTime = now;
+
+  if (!silent) {
+    setStatus('📐 جاري تحليل المستند...');
+    detectBtn.disabled = true;
+  }
+
+  var matsToClean = [];
+  function safeDelete(m) { if (m && typeof m.delete === 'function') { try { m.delete(); } catch(e){} } }
 
   try {
     var v = video;
     var canvas = document.createElement('canvas');
-    canvas.width = v.videoWidth || 1280;
-    canvas.height = v.videoHeight || 720;
+    var vw = v.videoWidth || 1280;
+    var vh = v.videoHeight || 720;
+    canvas.width = vw;
+    canvas.height = vh;
     var ctx = canvas.getContext('2d');
     ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
 
-    // 1. استخراج بيانات الصورة بشكل موثوق (بدلاً من cv.imread)
+    // 1. استخراج بيانات الصورة بشكل موثوق
     var imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     var src = cv.matFromImageData(imgData);
+    matsToClean.push(src);
+
     var gray = new cv.Mat();
     cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+    matsToClean.push(gray);
 
-    // 2. تحسين التباين باستخدام CLAHE (للتعامل مع الإضاءة غير المتجانسة)
+    // 2. تحسين التباين باستخدام CLAHE
     var clahe = new cv.CLAHE(2.0, new cv.Size(8, 8));
     var enhanced = new cv.Mat();
     clahe.apply(gray, enhanced);
     clahe.delete();
+    matsToClean.push(enhanced);
 
-    // 3. تنعيم خفيف لتقليل الضوضاء (بدون فقدان الحواف)
+    // 3. تنعيم خفيف
     var blurred = new cv.Mat();
     cv.GaussianBlur(enhanced, blurred, new cv.Size(5, 5), 0);
+    matsToClean.push(blurred);
 
     // 4. كشف الحواف Canny بعتبات متكيفة
     var edges = new cv.Mat();
     var medVal = cv.mean(blurred)[0];
-    var lowerThresh = Math.max(30, medVal * 0.33);
-    var upperThresh = Math.min(255, medVal * 1.33);
+    var lowerThresh = Math.max(20, medVal * 0.25);
+    var upperThresh = Math.min(255, medVal * 1.5);
     cv.Canny(blurred, edges, lowerThresh, upperThresh);
+    matsToClean.push(edges);
 
-    // 5. عمليات Morphology لإغلاق الفجوات في الحواف
+    // 5. Morphology Close لإغلاق الفجوات
     var kernel = cv.Mat.ones(5, 5, cv.CV_8U);
     var closed = new cv.Mat();
     cv.morphologyEx(edges, closed, cv.MORPH_CLOSE, kernel, new cv.Point(-1, -1), 2);
+    matsToClean.push(closed);
+    safeDelete(kernel);
 
-    // 6. إيجاد الكونتورات (RETR_LIST للحصول على كل الكونتورات وليس الخارجية فقط)
+    // 6. إيجاد الكونتورات (RETR_LIST للحصول على كل الكونتورات)
     var contours = new cv.MatVector();
     var hierarchy = new cv.Mat();
     cv.findContours(closed, contours, hierarchy, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE);
+    matsToClean.push(hierarchy);
 
     var stageRect = stage.getBoundingClientRect();
     var totalArea = canvas.width * canvas.height;
-    var minAreaPixels = totalArea * 0.03; // 3% بدلاً من 10%
+    var minAreaPixels = totalArea * 0.025; // 2.5% فقط
     var maxAreaPixels = totalArea * 0.95;
 
     var candidates = [];
-    
+
     // 7. البحث عن أفضل الكونتورات
     for (var i = 0; i < contours.size(); i++) {
       var cnt = contours.get(i);
       var area = cv.contourArea(cnt);
-      
-      // تجاهل الصغيرة جداً أو الكبيرة جداً
-      if (area < minAreaPixels || area > maxAreaPixels) {
-        cnt.delete();
-        continue;
-      }
+
+      if (area < minAreaPixels || area > maxAreaPixels) continue;
 
       var perimeter = cv.arcLength(cnt, true);
-      if (perimeter < 100) {
-        cnt.delete();
-        continue;
-      }
+      if (perimeter < 80) continue;
 
-      // تقريب الكونتور — تسامح أكبر (0.05 بدلاً من 0.02)
+      // تقريب الكونتور — تسامح أكبر (0.05)
       var approx = new cv.Mat();
       cv.approxPolyDP(cnt, approx, 0.05 * perimeter, true);
       var numPoints = approx.rows;
 
-      // حساب النسبة الباعية (Aspect Ratio) للمستطيل المحيط
+      // حساب النسبة الباعية
       var rect = cv.boundingRect(approx);
       var aspectRatio = rect.width / Math.max(rect.height, 1);
-      var isReasonableShape = (aspectRatio > 0.15 && aspectRatio < 6.5);
+      var isReasonableShape = (aspectRatio > 0.1 && aspectRatio < 8.0);
 
-      // تقييم الجودة: كلما كانت النقاط أقرب لـ 4، كان أفضل
-      // score = مساحة كبيرة + قرب النقاط من 4 + شكل معقول
+      // تقييم الجودة
       var shapeScore = 0;
-      if (numPoints >= 3 && numPoints <= 6) {
-        shapeScore = 1000 - Math.abs(numPoints - 4) * 200;
+      if (numPoints >= 3 && numPoints <= 7) {
+        shapeScore = 1000 - Math.abs(numPoints - 4) * 150;
       }
-      
-      if (shapeScore > 0 && isReasonableShape) {
+
+      // تقييم إضافي: مدى "المستطيلية" (rectangularity)
+      var boundingArea = rect.width * rect.height;
+      var rectangularity = area / Math.max(boundingArea, 1);
+
+      if (shapeScore > 0 && isReasonableShape && rectangularity > 0.5) {
         candidates.push({
           area: area,
-          score: shapeScore + (area / totalArea) * 500,
+          score: shapeScore + (area / totalArea) * 800 + rectangularity * 300,
           approx: approx.clone(),
           rect: rect,
-          numPoints: numPoints
+          numPoints: numPoints,
+          rectangularity: rectangularity
         });
       }
-      
       approx.delete();
-      cnt.delete();
     }
 
-    // 8. ترتيب المرشحين حسب النقاط (الأعلى أولاً)
+    // ترتيب المرشحين
     candidates.sort(function(a, b) { return b.score - a.score; });
 
-    var bestContour = null;
     var bestRect = null;
+    var bestApprox = null;
 
     if (candidates.length > 0) {
-      // خذ أفضل مرشح رباعي (أو قريب منه)
-      bestContour = candidates[0].approx;
+      bestApprox = candidates[0].approx;
       bestRect = candidates[0].rect;
-      
-      // إذا كان لدينا بالضبط 4 نقاط، استخدمها لحساب أدق
-      if (candidates[0].numPoints === 4) {
-        // يمكن استخدام النقاط الأربع لاحقاً لـ perspective correction
-        // لكننا هنا نحتاج فقط المستطيل المحيط للإطار UI
-        bestRect = cv.boundingRect(bestContour);
-      }
     } else {
-      // Fallback: لم نجد شكلاً رباعياً، خذ أكبر كونتور عام
+      // Fallback: أكبر كونتور عام
       var largestArea = 0;
       var largestContour = null;
       for (var j = 0; j < contours.size(); j++) {
@@ -381,29 +403,32 @@ function autoDetectDocument() {
         }
       }
       if (largestContour) {
-        bestContour = largestContour;
-        bestRect = cv.boundingRect(bestContour);
+        bestApprox = largestContour;
+        bestRect = cv.boundingRect(bestApprox);
       }
     }
 
-    // تنظيف الذاكرة
-    src.delete(); gray.delete(); enhanced.delete(); blurred.delete();
-    edges.delete(); kernel.delete(); closed.delete(); contours.delete(); hierarchy.delete();
+    // تنظيف
     for (var k = 0; k < candidates.length; k++) {
-      candidates[k].approx.delete();
+      safeDelete(candidates[k].approx);
     }
-    if (bestContour && bestContour !== candidates[0]?.approx) {
-      // سيتم حذفه لاحقاً أو هو نفسه
+    safeDelete(contours);
+    for (var m = 0; m < matsToClean.length; m++) {
+      safeDelete(matsToClean[m]);
+    }
+    if (bestApprox && bestApprox !== candidates[0]?.approx) {
+      safeDelete(bestApprox);
     }
 
     if (!bestRect) {
-      setStatus('❌ لم يتم العثور على مستند واضح. جرب تقريب الكاميرا أو تحسين الإضاءة.');
-      detectBtn.disabled = false;
+      if (!silent) {
+        setStatus('❌ لم يتم العثور على مستند واضح. جرب تقريب الكاميرا أو تحسين الإضاءة.');
+        detectBtn.disabled = false;
+      }
       return;
     }
 
-    // 9. تحويل الإحداثيات إلى نسب مئوية
-    var vw = canvas.width, vh = canvas.height;
+    // 8. تحويل الإحداثيات إلى نسب مئوية
     var scaleCover = Math.max(stageRect.width / vw, stageRect.height / vh);
     var dispW = vw * scaleCover;
     var dispH = vh * scaleCover;
@@ -415,32 +440,68 @@ function autoDetectDocument() {
     var widthP = (bestRect.width * scaleCover) / stageRect.width * 100;
     var heightP = (bestRect.height * scaleCover) / stageRect.height * 100;
 
-    // هامش صغير (2%)
+    // هامش صغير
     var margin = 2.0;
     leftP = Math.max(0, leftP - margin);
     topP = Math.max(0, topP - margin);
     widthP = Math.min(100 - leftP, widthP + (margin * 2));
     heightP = Math.min(100 - topP, heightP + (margin * 2));
 
-    if (widthP < 10 || heightP < 10) {
-      setStatus('⚠️ المستند صغير جداً. قرب الهاتف قليلاً.');
-      detectBtn.disabled = false;
-      if (bestContour) bestContour.delete();
+    if (widthP < 8 || heightP < 8) {
+      if (!silent) {
+        setStatus('⚠️ المستند صغير جداً. قرب الهاتف قليلاً.');
+        detectBtn.disabled = false;
+      }
       return;
     }
 
     // تطبيق الإطار
     applyFrame(leftP, topP, widthP, heightP);
-    setStatus('✅ تم ضبط الإطار! عدّل يدوياً إن لزم.');
-    noteEl.textContent = 'الإطار تم ضبطه تلقائياً. استخدم المقابض للدقة المطلقة.';
-
-    if (bestContour) bestContour.delete();
+    if (!silent) {
+      setStatus('✅ تم ضبط الإطار! عدّل يدوياً إن لزم.');
+      noteEl.textContent = 'الإطار تم ضبطه تلقائياً. استخدم المقابض للدقة المطلقة.';
+    }
 
   } catch (err) {
-    setStatus('⚠️ خطأ في الكشف: ' + (err.message || err));
-    console.error(err);
+    if (!silent) {
+      setStatus('⚠️ خطأ في الكشف: ' + (err.message || err));
+      console.error(err);
+    }
   }
-  detectBtn.disabled = false;
+  if (!silent) detectBtn.disabled = false;
+}
+
+// ===== الكشف التلقائي المستمر =====
+function toggleAutoDetect() {
+  if (state.isAutoDetecting) {
+    // إيقاف
+    if (state.autoDetectInterval) {
+      clearInterval(state.autoDetectInterval);
+      state.autoDetectInterval = null;
+    }
+    state.isAutoDetecting = false;
+    autoDetectBtn.classList.remove('active');
+    autoDetectBtn.textContent = '🔄 كشف مستمر';
+    setStatus('تم إيقاف الكشف المستمر');
+  } else {
+    // تشغيل
+    if (!state.cvReady) {
+      setStatus('⚠️ OpenCV لم يُحمل بعد. انتظر قليلاً...');
+      return;
+    }
+    state.isAutoDetecting = true;
+    autoDetectBtn.classList.add('active');
+    autoDetectBtn.textContent = '⏹ إيقاف الكشف';
+    setStatus('🔄 الكشف المستمر مفعّل — حرّك الهاتف فوق المستند');
+
+    // تشغيل فوراً ثم كل 800ms
+    autoDetectDocument(true);
+    state.autoDetectInterval = setInterval(function() {
+      if (!state.reviewData && state.stream && state.cvReady) {
+        autoDetectDocument(true);
+      }
+    }, 800);
+  }
 }
 
 // ===== منطق الكاميرا =====
@@ -466,9 +527,12 @@ function startCamera(){
     })
     .then(function(){
       setStatus('اضبط الإطار أو استخدم الكشف التلقائي');
-      noteEl.textContent='اسحب المنتصف لتحريكه، أو اضغط "كشف المستند" للتحديد التلقائي.';
+      noteEl.textContent='اسحب المنتصف لتحريكه، أو اضغط "كشف المستند" أو فعّل "كشف مستمر".';
       captureBtn.disabled = false;
-      if (state.cvReady) detectBtn.disabled = false;
+      if (state.cvReady) {
+        detectBtn.disabled = false;
+        autoDetectBtn.disabled = false;
+      }
     })
     .catch(function(err){ setStatus('تعذر الوصول إلى الكاميرا.'); throw err; });
 }
@@ -504,6 +568,8 @@ function captureInsideFrame(){
 
 function enterReview(dataUrl){
   state.reviewData=dataUrl; stopStream();
+  // إيقاف الكشف المستمر عند المراجعة
+  if (state.isAutoDetecting) toggleAutoDetect();
   stage.classList.add('is-review');
   reviewImg.src=dataUrl;
   captureBtn.textContent='✅ اعتماد'; switchBtn.textContent='📸 إعادة';
@@ -535,15 +601,21 @@ switchBtn.onclick=function(){
 };
 closeBtn.onclick=function(){
   stopStream();
+  if (state.isAutoDetecting) toggleAutoDetect();
   try{if(window.opener)window.opener.postMessage({app:APP_TAG,type:'closed'},'*');}catch(e){}
   try{window.close();}catch(e){}
 };
 resetBtn.onclick=resetFrame;
 document.getElementById('zoomInBtn').onclick=zoomIn;
 document.getElementById('zoomOutBtn').onclick=zoomOut;
-detectBtn.onclick = autoDetectDocument;
+detectBtn.onclick = function() { autoDetectDocument(false); };
+autoDetectBtn.onclick = toggleAutoDetect;
 
-window.addEventListener('beforeunload',stopStream);
+window.addEventListener('beforeunload', function() {
+  stopStream();
+  if (state.autoDetectInterval) clearInterval(state.autoDetectInterval);
+});
+
 resetFrame();
 startCamera().catch(function(){});
 </script>
