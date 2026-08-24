@@ -3,7 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
-<title>تصوير الإيصال - تحكم سهل</title>
+<title>تصوير الإيصال - كشف تلقائي</title>
+<!-- تحميل مكتبة OpenCV.js من المصدر الرسمي (خوارزميات رياضية، ليست ذكاء اصطناعي) -->
+<script async src="https://docs.opencv.org/4.9.0/opencv.js" onload="onOpenCvReady()" type="text/javascript"></script>
 <style>
   :root{--primary:#4f46a5;--line:#e4e7ec}
   *{box-sizing:border-box; user-select:none; -webkit-touch-callout:none; -webkit-user-select:none;}
@@ -17,55 +19,30 @@
   video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;z-index:1; pointer-events:none;}
   img.review{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000;display:none;z-index:2; pointer-events:auto;}
   
-  /* --- الإطار الرئيسي --- */
   .frame {
-    position:absolute;
-    z-index:3;
-    border:3px solid rgba(255,255,255,.95);
-    border-radius:14px;
+    position:absolute; z-index:3;
+    border:3px solid rgba(255,255,255,.95); border-radius:14px;
     box-shadow:0 0 0 9999px rgba(0,0,0,.36);
-    pointer-events:none;
-    touch-action:none;
-    transition: border-color 0.1s;
-    min-width: 50px;
-    min-height: 50px;
+    pointer-events:none; touch-action:none;
+    min-width: 50px; min-height: 50px;
+    transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1); /* حركة انسيابية عند الضبط التلقائي */
   }
   .frame.initial { width: 70%; height: 55%; top: 22.5%; left: 15%; }
   .frame.hidden{display:none}
   
-  /* --- المقابض (جميعها كبيرة ومناسبة للمس) --- */
+  /* المقابض */
   .handle {
-    position:absolute;
-    width: 44px;
-    height: 44px;
-    background: rgba(255, 255, 255, 0.95);
-    border: 3px solid var(--primary);
-    border-radius: 50%;
-    z-index:10;
-    pointer-events:auto;
-    touch-action:none;
+    position:absolute; width: 44px; height: 44px;
+    background: rgba(255, 255, 255, 0.95); border: 3px solid var(--primary); border-radius: 50%;
+    z-index:10; pointer-events:auto; touch-action:none;
     box-shadow: 0 2px 10px rgba(0,0,0,0.6);
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    font-size:16px;
-    font-weight:bold;
-    color:var(--primary);
+    display:flex; align-items:center; justify-content:center;
+    font-size:16px; font-weight:bold; color:var(--primary);
     transition: transform 0.15s, background 0.15s;
   }
   .handle:active { transform: scale(1.2); background: #fff; }
+  .handle::before { content: ''; position:absolute; inset: -12px; border-radius: 50%; background: transparent; z-index:-1; }
   
-  /* توزيع المقابض مع توسيع منطقة اللمس (باستخدام pseudo-element) */
-  .handle::before {
-    content: '';
-    position:absolute;
-    inset: -12px; /* مساحة لمس أكبر حول كل مقبض */
-    border-radius: 50%;
-    background: transparent;
-    z-index:-1;
-  }
-  
-  /* مواقع المقابض */
   .handle-n { top: -22px; left: 50%; transform: translateX(-50%); cursor: ns-resize; }
   .handle-s { bottom: -22px; left: 50%; transform: translateX(-50%); cursor: ns-resize; }
   .handle-e { right: -22px; top: 50%; transform: translateY(-50%); cursor: ew-resize; }
@@ -75,32 +52,15 @@
   .handle-se { bottom: -22px; right: -22px; cursor: nwse-resize; }
   .handle-sw { bottom: -22px; left: -22px; cursor: nesw-resize; }
   
-  /* المقبض المركزي (للسحب الكامل) */
   .handle-move {
-    top: 50%; left: 50%;
-    transform: translate(-50%, -50%);
-    width: 60px;
-    height: 60px;
-    background: rgba(79, 70, 165, 0.2);
-    border: 2px dashed rgba(255,255,255,0.8);
-    cursor: grab;
-    font-size: 24px;
-    color: #fff;
-    text-shadow: 0 1px 4px rgba(0,0,0,0.5);
-    backdrop-filter: blur(2px);
+    top: 50%; left: 50%; transform: translate(-50%, -50%);
+    width: 60px; height: 60px; background: rgba(79, 70, 165, 0.25);
+    border: 2px dashed rgba(255,255,255,0.9); cursor: grab;
+    font-size: 24px; color: #fff; backdrop-filter: blur(2px);
   }
   .handle-move:active { cursor: grabbing; transform: translate(-50%, -50%) scale(0.95); }
-  .handle-move::after {
-    content: '⤡';
-    font-size: 28px;
-    color: #fff;
-  }
-  
-  .handle-n::after, .handle-s::after { content: '▬'; font-size: 20px; color: var(--primary); }
-  .handle-e::after, .handle-w::after { content: '▬'; font-size: 20px; color: var(--primary); transform: rotate(90deg); }
-  .handle-ne::after, .handle-nw::after, .handle-se::after, .handle-sw::after { content: '▣'; font-size: 16px; color: var(--primary); }
+  .handle-move::after { content: '⤡'; font-size: 28px; color: #fff; }
 
-  /* تحسين للهواتف: جعل المقابض أكبر */
   @media (max-width: 768px) {
     .handle { width: 54px; height: 54px; border-width: 4px; }
     .handle-n, .handle-s { top: -27px; }
@@ -108,44 +68,29 @@
     .handle-ne, .handle-se { top: -27px; right: -27px; }
     .handle-nw, .handle-sw { top: -27px; left: -27px; }
     .handle-move { width: 72px; height: 72px; }
-    .handle::before { inset: -16px; } /* مساحة لمس أكبر */
+    .handle::before { inset: -16px; }
   }
 
   .status{position:absolute;top:10px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.7);color:#fff;font-size:12px;padding:8px 16px;border-radius:999px;z-index:15; white-space:nowrap; pointer-events:none; backdrop-filter:blur(4px);}
   .note{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);width:min(90%,560px);text-align:center;background:rgba(0,0,0,.7);color:#fff;border-radius:12px;padding:10px 14px;font-size:12px;line-height:1.7;z-index:15; pointer-events:none; backdrop-filter:blur(4px);}
   
   .actions{
-    display:flex;
-    gap:8px;
-    padding:12px;
-    background:#fff;
-    flex-shrink:0;
-    flex-wrap:wrap;
-    align-items:center;
-    justify-content:center;
+    display:flex; gap:6px; padding:10px 12px; background:#fff; flex-shrink:0; flex-wrap:wrap; align-items:center; justify-content:center;
   }
   .btn{
-    border:none;
-    border-radius:12px;
-    padding:12px 14px;
-    font-size:13px;
-    font-weight:700;
-    cursor:pointer;
-    min-width:60px;
-    flex:1 1 auto;
-    transition: all 0.15s;
+    border:none; border-radius:12px; padding:12px 12px; font-size:12px; font-weight:700; cursor:pointer;
+    min-width:50px; flex:1 1 auto; transition: all 0.15s; white-space:nowrap;
   }
   .btn:active { transform: scale(0.95); }
   .btn-primary{background:var(--primary);color:#fff}
   .btn-secondary{background:#f2f3f8;color:#344054}
-  .btn-zoom{background:#e0e7ff;color:#1e293b; flex:0.5; min-width:50px; padding:12px 8px;}
+  .btn-zoom{background:#e0e7ff;color:#1e293b; flex:0.4; min-width:40px; padding:12px 6px;}
+  .btn-detect{background:#10b981;color:#fff; flex:0.8;}
   .btn:disabled{opacity:.5;pointer-events:none}
 
   .stage.is-review .frame, 
   .stage.is-review .handle,
-  .stage.is-review .shade {
-    display: none !important;
-  }
+  .stage.is-review .shade { display: none !important; }
   .stage.is-review .review { display: block !important; }
   .stage.is-review video { display: none !important; }
 </style>
@@ -153,16 +98,13 @@
 <body>
 <div class="card">
   <div class="head">
-    <strong>📱 اسحب الإطار بسهولة</strong>
-    <small>اسحب النقاط الزرقاء لتغيير الحجم، واسحب المنتصف لتحريكه.</small>
+    <strong>📄 ضبط تلقائي أو يدوي</strong>
+    <small>اضغط "كشف المستند" ليقفز الإطار على الورقة، ثم اضبطه بدقة.</small>
   </div>
   <div class="stage" id="stage">
     <video id="video" playsinline webkit-playsinline muted autoplay></video>
     <img id="reviewImg" class="review" alt="مراجعة الصورة">
-    
-    <!-- الإطار مع المقابض -->
     <div class="frame initial" id="frame">
-      <!-- مقابض الحواف والزوايا -->
       <div class="handle handle-n" data-handle="n"></div>
       <div class="handle handle-s" data-handle="s"></div>
       <div class="handle handle-e" data-handle="e"></div>
@@ -171,18 +113,17 @@
       <div class="handle handle-nw" data-handle="nw"></div>
       <div class="handle handle-se" data-handle="se"></div>
       <div class="handle handle-sw" data-handle="sw"></div>
-      <!-- المقبض المركزي (للسحب الكامل) -->
       <div class="handle handle-move" data-handle="move"></div>
     </div>
-    
     <div class="shade"></div>
     <div class="status" id="status">جاري تشغيل الكاميرا...</div>
-    <div class="note" id="note">اسحب النقاط الزرقاء أو المنتصف لتحديد المنطقة بدقة.</div>
+    <div class="note" id="note">اسحب النقاط أو المنتصف، أو استخدم الكشف التلقائي.</div>
   </div>
   
   <div class="actions">
     <button type="button" class="btn btn-secondary" id="switchBtn">🔄 تبديل</button>
-    <button type="button" class="btn btn-secondary" id="resetBtn">↺ إعادة ضبط</button>
+    <button type="button" class="btn btn-secondary" id="resetBtn">↺ إعادة</button>
+    <button type="button" class="btn btn-detect" id="detectBtn">📐 كشف المستند</button>
     <button type="button" class="btn btn-zoom" id="zoomOutBtn">➖</button>
     <button type="button" class="btn btn-zoom" id="zoomInBtn">➕</button>
     <button type="button" class="btn btn-primary" id="captureBtn" disabled>📸 قص</button>
@@ -190,9 +131,9 @@
   </div>
 </div>
 <script>
-// ===== الإعدادات الأساسية =====
+// ===== الإعدادات =====
 var APP_TAG='sms-vip-camera';
-var state={stream:null,facing:'environment',reviewData:null};
+var state={stream:null,facing:'environment',reviewData:null, cvReady:false};
 var video=document.getElementById('video');
 var frame=document.getElementById('frame');
 var stage=document.getElementById('stage');
@@ -203,19 +144,22 @@ var captureBtn=document.getElementById('captureBtn');
 var switchBtn=document.getElementById('switchBtn');
 var closeBtn=document.getElementById('closeBtn');
 var resetBtn=document.getElementById('resetBtn');
+var detectBtn=document.getElementById('detectBtn');
 
-function setStatus(t){statusEl.textContent=t||'';}
+function setStatus(t){ statusEl.textContent=t||''; }
 
-// ===== منطق السحب (بما في ذلك السحب الكامل من المنتصف) =====
-var dragState = null;
-
-function getPos(e) {
-  if (e.touches) {
-    return { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY };
-  }
-  return { clientX: e.clientX, clientY: e.clientY };
+function onOpenCvReady() {
+  state.cvReady = true;
+  setStatus('cv جاهز - يمكنك استخدام الكشف التلقائي');
+  detectBtn.disabled = false;
 }
 
+// ===== منطق السحب (نفس السابق مع إضافة الـ Move) =====
+var dragState = null;
+function getPos(e) {
+  if (e.touches) return { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY };
+  return { clientX: e.clientX, clientY: e.clientY };
+}
 function initDrag(e, handle) {
   e.preventDefault();
   var rect = frame.getBoundingClientRect();
@@ -226,230 +170,246 @@ function initDrag(e, handle) {
     width: rect.width / stageRect.width * 100,
     height: rect.height / stageRect.height * 100
   };
-  var minSize = 10; // حد أدنى 10%
   var pos = getPos(e);
   dragState = {
-    handle: handle,
-    startX: pos.clientX,
-    startY: pos.clientY,
-    startTop: current.top,
-    startLeft: current.left,
-    startWidth: current.width,
-    startHeight: current.height,
-    stageRect: stageRect,
-    minSize: minSize,
-    maxSize: 95
+    handle: handle, startX: pos.clientX, startY: pos.clientY,
+    startTop: current.top, startLeft: current.left,
+    startWidth: current.width, startHeight: current.height,
+    stageRect: stageRect, minSize: 10, maxSize: 95
   };
 }
-
 function moveDrag(e) {
   if (!dragState) return;
   e.preventDefault();
   var pos = getPos(e);
   var dx = (pos.clientX - dragState.startX) / dragState.stageRect.width * 100;
   var dy = (pos.clientY - dragState.startY) / dragState.stageRect.height * 100;
-  
-  var newTop = dragState.startTop;
-  var newLeft = dragState.startLeft;
-  var newWidth = dragState.startWidth;
-  var newHeight = dragState.startHeight;
-  var min = dragState.minSize;
-  var max = dragState.maxSize;
+  var newTop = dragState.startTop, newLeft = dragState.startLeft, newWidth = dragState.startWidth, newHeight = dragState.startHeight;
+  var min = dragState.minSize, max = dragState.maxSize;
   var h = dragState.handle;
 
-  // --- حالة خاصة: السحب الكامل من المنتصف (Move) ---
   if (h === 'move') {
     newLeft = Math.max(0, Math.min(100 - newWidth, dragState.startLeft + dx));
     newTop = Math.max(0, Math.min(100 - newHeight, dragState.startTop + dy));
-    applyFrame(newLeft, newTop, newWidth, newHeight);
-    return;
+    applyFrame(newLeft, newTop, newWidth, newHeight); return;
   }
+  // تغيير الحجم
+  if (h === 'se') { newWidth = Math.min(max, Math.max(min, dragState.startWidth + dx)); newHeight = Math.min(max, Math.max(min, dragState.startHeight + dy)); }
+  else if (h === 'nw') { newLeft = Math.min(dragState.startLeft + dragState.startWidth - min, Math.max(0, dragState.startLeft + dx)); newWidth = Math.min(max, Math.max(min, dragState.startWidth - dx)); newTop = Math.min(dragState.startTop + dragState.startHeight - min, Math.max(0, dragState.startTop + dy)); newHeight = Math.min(max, Math.max(min, dragState.startHeight - dy)); }
+  else if (h === 'ne') { newWidth = Math.min(max, Math.max(min, dragState.startWidth + dx)); newTop = Math.min(dragState.startTop + dragState.startHeight - min, Math.max(0, dragState.startTop + dy)); newHeight = Math.min(max, Math.max(min, dragState.startHeight - dy)); }
+  else if (h === 'sw') { newLeft = Math.min(dragState.startLeft + dragState.startWidth - min, Math.max(0, dragState.startLeft + dx)); newWidth = Math.min(max, Math.max(min, dragState.startWidth - dx)); newHeight = Math.min(max, Math.max(min, dragState.startHeight + dy)); }
+  else if (h === 'n') { newTop = Math.min(dragState.startTop + dragState.startHeight - min, Math.max(0, dragState.startTop + dy)); newHeight = Math.min(max, Math.max(min, dragState.startHeight - dy)); }
+  else if (h === 's') { newHeight = Math.min(max, Math.max(min, dragState.startHeight + dy)); }
+  else if (h === 'w') { newLeft = Math.min(dragState.startLeft + dragState.startWidth - min, Math.max(0, dragState.startLeft + dx)); newWidth = Math.min(max, Math.max(min, dragState.startWidth - dx)); }
+  else if (h === 'e') { newWidth = Math.min(max, Math.max(min, dragState.startWidth + dx)); }
 
-  // --- باقي المقابض (تغيير الحجم) ---
-  if (h === 'se') {
-    newWidth = Math.min(max, Math.max(min, dragState.startWidth + dx));
-    newHeight = Math.min(max, Math.max(min, dragState.startHeight + dy));
-  }
-  else if (h === 'nw') {
-    newLeft = Math.min(dragState.startLeft + dragState.startWidth - min, Math.max(0, dragState.startLeft + dx));
-    newWidth = Math.min(max, Math.max(min, dragState.startWidth - dx));
-    newTop = Math.min(dragState.startTop + dragState.startHeight - min, Math.max(0, dragState.startTop + dy));
-    newHeight = Math.min(max, Math.max(min, dragState.startHeight - dy));
-  }
-  else if (h === 'ne') {
-    newWidth = Math.min(max, Math.max(min, dragState.startWidth + dx));
-    newTop = Math.min(dragState.startTop + dragState.startHeight - min, Math.max(0, dragState.startTop + dy));
-    newHeight = Math.min(max, Math.max(min, dragState.startHeight - dy));
-  }
-  else if (h === 'sw') {
-    newLeft = Math.min(dragState.startLeft + dragState.startWidth - min, Math.max(0, dragState.startLeft + dx));
-    newWidth = Math.min(max, Math.max(min, dragState.startWidth - dx));
-    newHeight = Math.min(max, Math.max(min, dragState.startHeight + dy));
-  }
-  else if (h === 'n') {
-    newTop = Math.min(dragState.startTop + dragState.startHeight - min, Math.max(0, dragState.startTop + dy));
-    newHeight = Math.min(max, Math.max(min, dragState.startHeight - dy));
-  }
-  else if (h === 's') {
-    newHeight = Math.min(max, Math.max(min, dragState.startHeight + dy));
-  }
-  else if (h === 'w') {
-    newLeft = Math.min(dragState.startLeft + dragState.startWidth - min, Math.max(0, dragState.startLeft + dx));
-    newWidth = Math.min(max, Math.max(min, dragState.startWidth - dx));
-  }
-  else if (h === 'e') {
-    newWidth = Math.min(max, Math.max(min, dragState.startWidth + dx));
-  }
-
-  // منع الخروج عن الحواف
   if (newLeft + newWidth > 100) newWidth = 100 - newLeft;
   if (newTop + newHeight > 100) newHeight = 100 - newTop;
-  
   applyFrame(newLeft, newTop, newWidth, newHeight);
 }
-
-function endDrag(e) {
-  if (dragState) {
-    dragState = null;
-  }
-}
-
+function endDrag(e) { dragState = null; }
 function applyFrame(left, top, width, height) {
-  frame.style.left = left + '%';
-  frame.style.top = top + '%';
-  frame.style.width = width + '%';
-  frame.style.height = height + '%';
+  frame.style.left = left + '%'; frame.style.top = top + '%';
+  frame.style.width = width + '%'; frame.style.height = height + '%';
   frame.classList.remove('initial');
 }
-
-// ===== وظائف التكبير والتصغير وإعادة الضبط =====
-function zoomIn() {
-  var rect = frame.getBoundingClientRect();
-  var stageRect = stage.getBoundingClientRect();
-  var w = rect.width / stageRect.width * 100;
-  var h = rect.height / stageRect.height * 100;
-  var l = (rect.left - stageRect.left) / stageRect.width * 100;
-  var t = (rect.top - stageRect.top) / stageRect.height * 100;
-  
-  var newW = Math.min(95, w * 1.08);
-  var newH = Math.min(95, h * 1.08);
-  var newL = l - (newW - w) / 2;
-  var newT = t - (newH - h) / 2;
-  
-  // منع الخروج
-  newL = Math.max(0, Math.min(100 - newW, newL));
-  newT = Math.max(0, Math.min(100 - newH, newT));
-  
-  applyFrame(newL, newT, newW, newH);
-}
-
-function zoomOut() {
-  var rect = frame.getBoundingClientRect();
-  var stageRect = stage.getBoundingClientRect();
-  var w = rect.width / stageRect.width * 100;
-  var h = rect.height / stageRect.height * 100;
-  var l = (rect.left - stageRect.left) / stageRect.width * 100;
-  var t = (rect.top - stageRect.top) / stageRect.height * 100;
-  
-  var newW = Math.max(12, w * 0.92);
-  var newH = Math.max(12, h * 0.92);
-  var newL = l + (w - newW) / 2;
-  var newT = t + (h - newH) / 2;
-  
-  newL = Math.max(0, Math.min(100 - newW, newL));
-  newT = Math.max(0, Math.min(100 - newH, newT));
-  
-  applyFrame(newL, newT, newW, newH);
-}
-
-function resetFrame() {
-  applyFrame(15, 22.5, 70, 55);
-}
-
-// ربط أحداث السحب بالمقابض
 document.querySelectorAll('.handle').forEach(function(h) {
   h.addEventListener('mousedown', function(e) { initDrag(e, this.dataset.handle); });
   h.addEventListener('touchstart', function(e) { initDrag(e, this.dataset.handle); }, {passive: false});
 });
-
 document.addEventListener('mousemove', moveDrag);
 document.addEventListener('touchmove', moveDrag, {passive: false});
 document.addEventListener('mouseup', endDrag);
 document.addEventListener('touchend', endDrag);
 document.addEventListener('touchcancel', endDrag);
 
+// ===== وظائف التكبير وإعادة الضبط =====
+function zoomIn() {
+  var rect = frame.getBoundingClientRect(), sr = stage.getBoundingClientRect();
+  var w = rect.width / sr.width * 100, h = rect.height / sr.height * 100, l = (rect.left - sr.left) / sr.width * 100, t = (rect.top - sr.top) / sr.height * 100;
+  var nw = Math.min(95, w * 1.08), nh = Math.min(95, h * 1.08);
+  var nl = Math.max(0, Math.min(100 - nw, l - (nw - w) / 2));
+  var nt = Math.max(0, Math.min(100 - nh, t - (nh - h) / 2));
+  applyFrame(nl, nt, nw, nh);
+}
+function zoomOut() {
+  var rect = frame.getBoundingClientRect(), sr = stage.getBoundingClientRect();
+  var w = rect.width / sr.width * 100, h = rect.height / sr.height * 100, l = (rect.left - sr.left) / sr.width * 100, t = (rect.top - sr.top) / sr.height * 100;
+  var nw = Math.max(12, w * 0.92), nh = Math.max(12, h * 0.92);
+  var nl = Math.max(0, Math.min(100 - nw, l + (w - nw) / 2));
+  var nt = Math.max(0, Math.min(100 - nh, t + (h - nh) / 2));
+  applyFrame(nl, nt, nw, nh);
+}
+function resetFrame() { applyFrame(15, 22.5, 70, 55); }
+
+// ===== كشف المستند التلقائي (باستخدام OpenCV.js) =====
+function autoDetectDocument() {
+  if (!state.cvReady || typeof cv === 'undefined') {
+    setStatus('⚠️ جاري تحميل مكتبة الكشف... انتظر لحظة.');
+    return;
+  }
+  if (!state.stream) { setStatus('⚠️ الكاميرا غير نشطة.'); return; }
+  
+  setStatus('📐 جاري تحليل المستند...');
+  detectBtn.disabled = true;
+  
+  try {
+    var v = video;
+    var canvas = document.createElement('canvas');
+    canvas.width = v.videoWidth;
+    canvas.height = v.videoHeight;
+    var ctx = canvas.getContext('2d');
+    ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+    
+    // 1. تحويل إلى صورة OpenCV
+    var src = cv.imread(canvas);
+    var gray = new cv.Mat();
+    cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+    
+    // 2. تنعيم الصورة لتقليل الضوضاء
+    var blurred = new cv.Mat();
+    cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0);
+    
+    // 3. كشف الحواف (Canny)
+    var edges = new cv.Mat();
+    cv.Canny(blurred, edges, 75, 200);
+    
+    // 4. إيجاد الكونتورات
+    var contours = new cv.MatVector();
+    var hierarchy = new cv.Mat();
+    cv.findContours(edges, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+    
+    var maxArea = 0;
+    var bestContour = null;
+    var minAreaPixels = (canvas.width * canvas.height) * 0.10; // 10% من مساحة الشاشة
+    
+    // 5. البحث عن أكبر كونتور رباعي (أو قريب من 4 زوايا)
+    for (var i = 0; i < contours.size(); i++) {
+      var cnt = contours.get(i);
+      var area = cv.contourArea(cnt);
+      if (area < minAreaPixels) continue;
+      
+      // تقريب الكونتور لمضلع
+      var perimeter = cv.arcLength(cnt, true);
+      var approx = new cv.Mat();
+      cv.approxPolyDP(cnt, approx, 0.02 * perimeter, true);
+      
+      if (approx.rows === 4) { // وجدنا شكل رباعي (مستند)
+        if (area > maxArea) {
+          maxArea = area;
+          bestContour = approx.clone();
+        }
+      }
+      approx.delete();
+    }
+    
+    // تنظيف الذاكرة
+    src.delete(); gray.delete(); blurred.delete(); edges.delete(); contours.delete(); hierarchy.delete();
+    
+    if (!bestContour) {
+      setStatus('❌ لم يتم العثور على مستند واضح. حاول يدوياً.');
+      detectBtn.disabled = false;
+      return;
+    }
+    
+    // 6. حساب المستطيل المحيط (Bounding Box) حول الكونتور المكتشف
+    var rect = cv.boundingRect(bestContour);
+    bestContour.delete();
+    
+    // 7. تحويل إحداثيات المستطيل من حجم الفيديو الخام إلى نسبة مئوية بالنسبة لـ Stage
+    var vw = canvas.width, vh = canvas.height;
+    var stageRect = stage.getBoundingClientRect();
+    var scaleCover = Math.max(stageRect.width / vw, stageRect.height / vh);
+    var dispW = vw * scaleCover;
+    var dispH = vh * scaleCover;
+    var offX = (stageRect.width - dispW) / 2;
+    var offY = (stageRect.height - dispH) / 2;
+    
+    // حساب النسب المئوية
+    var leftP = ((rect.x * scaleCover) + offX) / stageRect.width * 100;
+    var topP = ((rect.y * scaleCover) + offY) / stageRect.height * 100;
+    var widthP = (rect.width * scaleCover) / stageRect.width * 100;
+    var heightP = (rect.height * scaleCover) / stageRect.height * 100;
+    
+    // هامش صغير حول المستند (3%) حتى لا يلتصق بالحافة تماماً
+    var margin = 1.5;
+    leftP = Math.max(0, leftP - margin);
+    topP = Math.max(0, topP - margin);
+    widthP = Math.min(100 - leftP, widthP + (margin * 2));
+    heightP = Math.min(100 - topP, heightP + (margin * 2));
+    
+    // تأكد من الحد الأدنى
+    if (widthP < 15 || heightP < 15) {
+      setStatus('⚠️ المستند صغير جداً أو قريب جداً. قرب الهاتف.');
+      detectBtn.disabled = false;
+      return;
+    }
+    
+    // تطبيق الإطار الجديد
+    applyFrame(leftP, topP, widthP, heightP);
+    setStatus('✅ تم ضبط الإطار على المستند! عدّل يدوياً إن لزم.');
+    noteEl.textContent = 'الإطار تم ضبطه تلقائياً. استخدم المقابض للدقة المطلقة.';
+    
+  } catch (err) {
+    setStatus('⚠️ خطأ في الكشف: ' + err.message);
+    console.error(err);
+  }
+  detectBtn.disabled = false;
+}
+
 // ===== منطق الكاميرا =====
 function stopStream(){
   try{if(state.stream&&state.stream.getTracks)state.stream.getTracks().forEach(function(t){try{t.stop();}catch(e){}});}catch(e){}
   state.stream=null;
 }
-
 function startCamera(){
   frame.classList.remove('hidden');
-  captureBtn.disabled=true;
+  captureBtn.disabled = true;
   setStatus('جاري تشغيل الكاميرا...');
   var md=navigator.mediaDevices;
-  if(!md||typeof md.getUserMedia!=='function'){
-    setStatus('المتصفح لا يدعم الكاميرا هنا.');
-    return Promise.reject(new Error('NO_GUM'));
-  }
+  if(!md||typeof md.getUserMedia!=='function'){ setStatus('المتصفح لا يدعم الكاميرا.'); return Promise.reject(new Error('NO_GUM')); }
   stopStream();
   var constraints={audio:false,video:{facingMode:state.facing,width:{ideal:1280},height:{ideal:720}}};
   return md.getUserMedia(constraints)
     .catch(function(){return md.getUserMedia({audio:false,video:{facingMode:state.facing}});})
     .catch(function(){return md.getUserMedia({audio:false,video:true});})
     .then(function(stream){
-      state.stream=stream;
-      video.srcObject=stream;
+      state.stream=stream; video.srcObject=stream;
       var p=video.play();
       return (p&&p.then)?p.then(function(){return stream;}):stream;
     })
     .then(function(){
-      setStatus('اضبط الإطار ثم اضغط قص');
-      noteEl.textContent='اسحب المنتصف لتحريك الإطار، واستخدم + و - لتغيير الحجم بسهولة.';
-      captureBtn.disabled=false;
+      setStatus('اضبط الإطار أو استخدم الكشف التلقائي');
+      noteEl.textContent='اسحب المنتصف لتحريكه، أو اضغط "كشف المستند" للتحديد التلقائي.';
+      captureBtn.disabled = false;
+      if (state.cvReady) detectBtn.disabled = false;
     })
-    .catch(function(err){
-      setStatus('تعذر الوصول إلى الكاميرا.');
-      noteEl.textContent='تحقق من منح إذن الكاميرا لهذا الموقع.';
-      throw err;
-    });
+    .catch(function(err){ setStatus('تعذر الوصول إلى الكاميرا.'); throw err; });
 }
 
 function mapFrameToSource(){
   var vw=video.videoWidth,vh=video.videoHeight;
   if(!vw||!vh)return null;
-  var vRect=video.getBoundingClientRect();
-  var fRect=frame.getBoundingClientRect();
-  if(!vRect.width||!vRect.height||!fRect.width||!fRect.height)return null;
+  var vRect=video.getBoundingClientRect(), fRect=frame.getBoundingClientRect();
   var scale=Math.max(vRect.width/vw, vRect.height/vh);
   var dispW=vw*scale,dispH=vh*scale;
   var offX=(vRect.width-dispW)/2, offY=(vRect.height-dispH)/2;
-  
-  var x=(fRect.left-vRect.left-offX)/scale;
-  var y=(fRect.top-vRect.top-offY)/scale;
-  var w=fRect.width/scale;
-  var h=fRect.height/scale;
-  
-  if(x<0){w+=x;x=0;}
-  if(y<0){h+=y;y=0;}
-  if(x+w>vw)w=vw-x;
-  if(y+h>vh)h=vh-y;
+  var x=(fRect.left-vRect.left-offX)/scale, y=(fRect.top-vRect.top-offY)/scale;
+  var w=fRect.width/scale, h=fRect.height/scale;
+  if(x<0){w+=x;x=0;} if(y<0){h+=y;y=0;}
+  if(x+w>vw)w=vw-x; if(y+h>vh)h=vh-y;
   if(w<8||h<8)return null;
   return {x:x,y:y,w:w,h:h};
 }
 
 function captureInsideFrame(){
   var rect=mapFrameToSource();
-  if(!rect){setStatus('انتظر استقرار الصورة ثم حاول مجددًا.');return;}
+  if(!rect){setStatus('انتظر استقرار الصورة ثم حاول.');return;}
   var canvas=document.createElement('canvas');
-  var maxSide=1600;
-  var scale=Math.min(1,maxSide/Math.max(rect.w,rect.h));
-  canvas.width=Math.max(1,Math.round(rect.w*scale));
-  canvas.height=Math.max(1,Math.round(rect.h*scale));
+  var maxSide=1600, scale=Math.min(1,maxSide/Math.max(rect.w,rect.h));
+  canvas.width=Math.max(1,Math.round(rect.w*scale)); canvas.height=Math.max(1,Math.round(rect.h*scale));
   var ctx=canvas.getContext('2d');
-  ctx.fillStyle='#fff';
-  ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle='#fff'; ctx.fillRect(0,0,canvas.width,canvas.height);
   ctx.drawImage(video,rect.x,rect.y,rect.w,rect.h,0,0,canvas.width,canvas.height);
   var data=canvas.toDataURL('image/jpeg',0.86);
   if(data.length>2.4*1024*1024)data=canvas.toDataURL('image/jpeg',0.72);
@@ -457,34 +417,23 @@ function captureInsideFrame(){
 }
 
 function enterReview(dataUrl){
-  state.reviewData=dataUrl;
-  stopStream();
+  state.reviewData=dataUrl; stopStream();
   stage.classList.add('is-review');
   reviewImg.src=dataUrl;
-  captureBtn.textContent='✅ اعتماد';
-  switchBtn.textContent='📸 إعادة';
+  captureBtn.textContent='✅ اعتماد'; switchBtn.textContent='📸 إعادة';
   setStatus('مراجعة الصورة المقصوصة');
-  noteEl.textContent='اعتمد الصورة لإرسالها، أو أعد التصوير لضبط الإطار مجددًا.';
+  noteEl.textContent='اعتمد أو أعد التصوير.';
 }
-
 function backToLive(){
-  state.reviewData=null;
-  stage.classList.remove('is-review');
-  reviewImg.src='';
-  captureBtn.textContent='📸 قص';
-  switchBtn.textContent='🔄 تبديل';
+  state.reviewData=null; stage.classList.remove('is-review'); reviewImg.src='';
+  captureBtn.textContent='📸 قص'; switchBtn.textContent='🔄 تبديل';
   frame.classList.remove('hidden');
   startCamera().catch(function(){});
 }
-
 function sendToOpener(dataUrl){
   var payload={app:APP_TAG,type:'receipt-photo',dataUrl:dataUrl};
-  try{
-    if(window.opener&&!window.opener.closed){
-      window.opener.postMessage(payload,'*');
-    }
-  }catch(e){}
-  setStatus('تم إرسال الصورة، يمكنك إغلاق هذه النافذة.');
+  try{ if(window.opener&&!window.opener.closed) window.opener.postMessage(payload,'*'); }catch(e){}
+  setStatus('تم الإرسال، سيتم الإغلاق.');
   setTimeout(function(){try{window.close();}catch(e){}},250);
 }
 
@@ -506,9 +455,10 @@ closeBtn.onclick=function(){
 resetBtn.onclick=resetFrame;
 document.getElementById('zoomInBtn').onclick=zoomIn;
 document.getElementById('zoomOutBtn').onclick=zoomOut;
+detectBtn.onclick = autoDetectDocument;
 
 window.addEventListener('beforeunload',stopStream);
-resetFrame(); // ضبط الإطار في المنتصف
+resetFrame();
 startCamera().catch(function(){});
 </script>
 </body>
