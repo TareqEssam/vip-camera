@@ -2,62 +2,151 @@
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>تصوير الإيصال</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<title>تصوير الإيصال - إطار قابل للسحب</title>
 <style>
   :root{--primary:#4f46a5;--line:#e4e7ec}
-  *{box-sizing:border-box}
-  html,body{height:100%;margin:0;background:#05070a;font-family:-apple-system,'Segoe UI',Tahoma,Arial,sans-serif}
+  *{box-sizing:border-box; user-select:none; -webkit-touch-callout:none; -webkit-user-select:none;}
+  html,body{height:100%;margin:0;background:#05070a;font-family:-apple-system,'Segoe UI',Tahoma,Arial,sans-serif; overflow:hidden; touch-action:none;}
   .card{height:100dvh;display:flex;flex-direction:column;background:#05070a}
-  .head{padding:12px 14px;background:#fff;border-bottom:1px solid var(--line)}
+  .head{padding:12px 14px;background:#fff;border-bottom:1px solid var(--line); flex-shrink:0;}
   .head strong{display:block;font-size:14px;color:#1d2433}
   .head small{display:block;color:#667085;font-size:11px;margin-top:3px}
-  .stage{position:relative;flex:1;min-height:0;background:#05070a;overflow:hidden}
-  video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;z-index:1}
-  img.review{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000;display:none;z-index:2}
+  .stage{position:relative;flex:1;min-height:0;background:#05070a;overflow:hidden; touch-action:none;}
+  video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;z-index:1; pointer-events:none;}
+  img.review{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000;display:none;z-index:2; pointer-events:auto;}
   .shade{position:absolute;inset:0;z-index:2;pointer-events:none}
-  .frame{position:absolute;z-index:3;left:50%;top:50%;width:86%;aspect-ratio:4/3;height:auto;transform:translate(-50%,-50%);
-    border:3px solid rgba(255,255,255,.96);border-radius:14px;box-shadow:0 0 0 9999px rgba(0,0,0,.36);pointer-events:none}
+  
+  /* --- الإطار الرئيسي (قابل للسحب والتوسيع) --- */
+  .frame {
+    position:absolute;
+    z-index:3;
+    border:3px solid rgba(255,255,255,.95);
+    border-radius:14px;
+    box-shadow:0 0 0 9999px rgba(0,0,0,.36);
+    pointer-events:none; /* الإطار نفسه لا يمنع اللمس، المقابض هي التي تعمل */
+    touch-action:none;
+    transition: border-color 0.1s;
+    min-width: 60px;
+    min-height: 60px;
+  }
+  /* إطار افتراضي في وسط الشاشة تقريبًا */
+  .frame.initial {
+    width: 70%;
+    height: 55%;
+    top: 22.5%;
+    left: 15%;
+  }
   .frame.hidden{display:none}
-  .frame span{position:absolute;width:28px;height:28px;border-color:#fff;border-style:solid}
-  .frame span:nth-child(1){top:-3px;right:-3px;border-width:4px 4px 0 0;border-radius:0 8px 0 0}
-  .frame span:nth-child(2){top:-3px;left:-3px;border-width:4px 0 0 4px;border-radius:8px 0 0 0}
-  .frame span:nth-child(3){bottom:-3px;right:-3px;border-width:0 4px 4px 0;border-radius:0 0 8px 0}
-  .frame span:nth-child(4){bottom:-3px;left:-3px;border-width:0 0 4px 4px;border-radius:0 0 0 8px}
-  .note{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);width:min(90%,560px);text-align:center;
-    background:rgba(0,0,0,.62);color:#fff;border-radius:12px;padding:9px 12px;font-size:11px;line-height:1.7;z-index:5}
-  .status{position:absolute;top:10px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.55);color:#fff;
-    font-size:11px;padding:6px 12px;border-radius:999px;z-index:5}
-  .actions{display:flex;gap:8px;padding:12px;background:#fff}
-  .btn{flex:1;border:none;border-radius:12px;padding:13px 10px;font-size:13px;font-weight:700;cursor:pointer}
+  
+  /* --- زوايا الإطار الأربعة (مقابض السحب) --- */
+  .handle {
+    position:absolute;
+    width: 36px;
+    height: 36px;
+    background: rgba(255,255,255,0.95);
+    border: 2px solid var(--primary);
+    border-radius: 50%;
+    z-index:10;
+    pointer-events:auto;
+    touch-action:none;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:12px;
+    color:#333;
+    transition: transform 0.15s, background 0.15s;
+  }
+  .handle:active {
+    transform: scale(1.15);
+    background: #fff;
+  }
+  /* توزيع المقابض على الحواف */
+  .handle-n { top: -18px; left: 50%; transform: translateX(-50%); cursor: ns-resize; touch-action: none; }
+  .handle-s { bottom: -18px; left: 50%; transform: translateX(-50%); cursor: ns-resize; touch-action: none; }
+  .handle-e { right: -18px; top: 50%; transform: translateY(-50%); cursor: ew-resize; touch-action: none; }
+  .handle-w { left: -18px; top: 50%; transform: translateY(-50%); cursor: ew-resize; touch-action: none; }
+  .handle-ne { top: -18px; right: -18px; cursor: nesw-resize; touch-action: none; }
+  .handle-nw { top: -18px; left: -18px; cursor: nwse-resize; touch-action: none; }
+  .handle-se { bottom: -18px; right: -18px; cursor: nwse-resize; touch-action: none; }
+  .handle-sw { bottom: -18px; left: -18px; cursor: nesw-resize; touch-action: none; }
+
+  /* أيقونات صغيرة في المقابض (اختياري) */
+  .handle::after {
+    content: '';
+    display:block;
+    width: 10px;
+    height: 10px;
+    border: 2px solid var(--primary);
+    border-radius: 2px;
+    opacity: 0.6;
+  }
+  .handle-n::after, .handle-s::after { width: 14px; height: 4px; } /* خط أفقي */
+  .handle-e::after, .handle-w::after { width: 4px; height: 14px; } /* خط عمودي */
+  .handle-ne::after, .handle-nw::after, .handle-se::after, .handle-sw::after { width: 8px; height: 8px; background: var(--primary); opacity: 0.3; border: none; }
+
+  .status{position:absolute;top:10px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.65);color:#fff;font-size:11px;padding:6px 12px;border-radius:999px;z-index:15; white-space:nowrap; pointer-events:none;}
+  .note{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);width:min(90%,560px);text-align:center;background:rgba(0,0,0,.62);color:#fff;border-radius:12px;padding:9px 12px;font-size:11px;line-height:1.7;z-index:15; pointer-events:none;}
+  
+  .actions{display:flex;gap:8px;padding:12px;background:#fff; flex-shrink:0; flex-wrap:wrap;}
+  .btn{flex:1;border:none;border-radius:12px;padding:13px 10px;font-size:13px;font-weight:700;cursor:pointer; min-width:60px;}
   .btn-primary{background:var(--primary);color:#fff}
   .btn-secondary{background:#f2f3f8;color:#344054}
   .btn:disabled{opacity:.55;pointer-events:none}
+
+  /* وضع المراجعة (إخفاء الإطار والمقابض) */
+  .stage.is-review .frame, 
+  .stage.is-review .handle,
+  .stage.is-review .shade {
+    display: none !important;
+  }
+  .stage.is-review .review { display: block !important; }
+  .stage.is-review video { display: none !important; }
+
+  @media (max-width:600px) {
+    .handle { width: 44px; height: 44px; } /* مساحة أكبر للأصابع */
+    .handle-n, .handle-s { top: -22px; }
+    .handle-e, .handle-w { right: -22px; left: -22px; }
+    .handle-ne, .handle-se { top: -22px; right: -22px; }
+    .handle-nw, .handle-sw { top: -22px; left: -22px; }
+  }
 </style>
 </head>
 <body>
 <div class="card">
   <div class="head">
-    <strong>تصوير الإيصال داخل الإطار</strong>
-    <small>ضع المستند بالكامل داخل الإطار الأبيض ثم اضغط التقاط.</small>
+    <strong>📐 اسحب أي حافة لتعديل الإطار</strong>
+    <small>المس أي نقطة زرقاء واسحب لتغيير حجم وشكل منطقة القص.</small>
   </div>
   <div class="stage" id="stage">
     <video id="video" playsinline webkit-playsinline muted autoplay></video>
     <img id="reviewImg" class="review" alt="مراجعة الصورة">
-    <div class="frame hidden" id="frame"><span></span><span></span><span></span><span></span></div>
+    
+    <!-- الإطار مع 8 مقابض -->
+    <div class="frame initial" id="frame">
+      <div class="handle handle-n" data-handle="n"></div>
+      <div class="handle handle-s" data-handle="s"></div>
+      <div class="handle handle-e" data-handle="e"></div>
+      <div class="handle handle-w" data-handle="w"></div>
+      <div class="handle handle-ne" data-handle="ne"></div>
+      <div class="handle handle-nw" data-handle="nw"></div>
+      <div class="handle handle-se" data-handle="se"></div>
+      <div class="handle handle-sw" data-handle="sw"></div>
+    </div>
+    
+    <div class="shade"></div>
     <div class="status" id="status">جاري تشغيل الكاميرا...</div>
-    <div class="note" id="note">امنح إذن الكاميرا عند الطلب. الإطار يظهر بعد بدء البث مباشرة.</div>
+    <div class="note" id="note">اسحب النقاط الزرقاء لتحديد منطقة الإيصال بدقة.</div>
   </div>
   <div class="actions">
-    <button type="button" class="btn btn-secondary" id="switchBtn">تبديل الكاميرا</button>
-    <button type="button" class="btn btn-secondary" id="closeBtn">إغلاق</button>
-    <button type="button" class="btn btn-primary" id="captureBtn" disabled>📸 التقاط داخل الإطار</button>
+    <button type="button" class="btn btn-secondary" id="switchBtn">🔄 تبديل</button>
+    <button type="button" class="btn btn-secondary" id="closeBtn">✖ إغلاق</button>
+    <button type="button" class="btn btn-primary" id="captureBtn" disabled>📸 قص & التقاط</button>
   </div>
 </div>
 <script>
-// هذه الصفحة يجب استضافتها على نطاق HTTPS خارج Apps Script (GitHub Pages / Firebase Hosting / Netlify)
-// لأن getUserMedia محظور بنيويًا داخل الإطار المعزول الذي تقدّم منه Apps Script صفحات HtmlService.
-// المرجع الرسمي: https://developers.google.com/apps-script/guides/support/troubleshooting ("Permissions policy violation")
+// ===== إعدادات الكاميرا =====
 var APP_TAG='sms-vip-camera';
 var state={stream:null,facing:'environment',reviewData:null};
 var video=document.getElementById('video');
@@ -72,13 +161,143 @@ var closeBtn=document.getElementById('closeBtn');
 
 function setStatus(t){statusEl.textContent=t||'';}
 
+// ===== منطق سحب الإطار (Drag to Resize) =====
+var dragState = null;
+
+function getPos(e) {
+  if (e.touches) {
+    return { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY };
+  }
+  return { clientX: e.clientX, clientY: e.clientY };
+}
+
+function initDrag(e, handle) {
+  e.preventDefault();
+  var rect = frame.getBoundingClientRect();
+  var stageRect = stage.getBoundingClientRect();
+  // نأخذ القيم الحالية كنسبة مئوية بالنسبة للحاوية (stage)
+  var current = {
+    top: (rect.top - stageRect.top) / stageRect.height * 100,
+    left: (rect.left - stageRect.left) / stageRect.width * 100,
+    width: rect.width / stageRect.width * 100,
+    height: rect.height / stageRect.height * 100
+  };
+  // نمنع الخروج عن الحواف + حد أدنى
+  var minSize = 12; // 12% من حجم الحاوية تقريبًا كحد أدنى
+  
+  var pos = getPos(e);
+  dragState = {
+    handle: handle,
+    startX: pos.clientX,
+    startY: pos.clientY,
+    startTop: current.top,
+    startLeft: current.left,
+    startWidth: current.width,
+    startHeight: current.height,
+    stageRect: stageRect,
+    minSize: minSize
+  };
+}
+
+function moveDrag(e) {
+  if (!dragState) return;
+  e.preventDefault();
+  var pos = getPos(e);
+  var dx = (pos.clientX - dragState.startX) / dragState.stageRect.width * 100;
+  var dy = (pos.clientY - dragState.startY) / dragState.stageRect.height * 100;
+  
+  var newTop = dragState.startTop;
+  var newLeft = dragState.startLeft;
+  var newWidth = dragState.startWidth;
+  var newHeight = dragState.startHeight;
+  var min = dragState.minSize;
+  var maxW = 95, maxH = 95; // ألا يزيد عن 95% من الحاوية
+  
+  var h = dragState.handle;
+  
+  // الزوايا الأربع
+  if (h === 'se') {
+    newWidth = Math.min(maxW, Math.max(min, dragState.startWidth + dx));
+    newHeight = Math.min(maxH, Math.max(min, dragState.startHeight + dy));
+  }
+  else if (h === 'nw') {
+    newLeft = Math.min(dragState.startLeft + dragState.startWidth - min, Math.max(0, dragState.startLeft + dx));
+    newWidth = Math.min(maxW, Math.max(min, dragState.startWidth - dx));
+    newTop = Math.min(dragState.startTop + dragState.startHeight - min, Math.max(0, dragState.startTop + dy));
+    newHeight = Math.min(maxH, Math.max(min, dragState.startHeight - dy));
+  }
+  else if (h === 'ne') {
+    newWidth = Math.min(maxW, Math.max(min, dragState.startWidth + dx));
+    newTop = Math.min(dragState.startTop + dragState.startHeight - min, Math.max(0, dragState.startTop + dy));
+    newHeight = Math.min(maxH, Math.max(min, dragState.startHeight - dy));
+  }
+  else if (h === 'sw') {
+    newLeft = Math.min(dragState.startLeft + dragState.startWidth - min, Math.max(0, dragState.startLeft + dx));
+    newWidth = Math.min(maxW, Math.max(min, dragState.startWidth - dx));
+    newHeight = Math.min(maxH, Math.max(min, dragState.startHeight + dy));
+  }
+  // الحواف الأربعة
+  else if (h === 'n') {
+    newTop = Math.min(dragState.startTop + dragState.startHeight - min, Math.max(0, dragState.startTop + dy));
+    newHeight = Math.min(maxH, Math.max(min, dragState.startHeight - dy));
+  }
+  else if (h === 's') {
+    newHeight = Math.min(maxH, Math.max(min, dragState.startHeight + dy));
+  }
+  else if (h === 'w') {
+    newLeft = Math.min(dragState.startLeft + dragState.startWidth - min, Math.max(0, dragState.startLeft + dx));
+    newWidth = Math.min(maxW, Math.max(min, dragState.startWidth - dx));
+  }
+  else if (h === 'e') {
+    newWidth = Math.min(maxW, Math.max(min, dragState.startWidth + dx));
+  }
+  
+  // التأكد من أن العرض والارتفاع لا يتجاوزان الحاوية بالكامل
+  if (newLeft + newWidth > 100) { newWidth = 100 - newLeft; }
+  if (newTop + newHeight > 100) { newHeight = 100 - newTop; }
+  
+  // تطبيق القيم
+  frame.style.top = newTop + '%';
+  frame.style.left = newLeft + '%';
+  frame.style.width = newWidth + '%';
+  frame.style.height = newHeight + '%';
+  frame.classList.remove('initial');
+}
+
+function endDrag(e) {
+  if (dragState) {
+    dragState = null;
+  }
+}
+
+// ربط الأحداث بالمقابض
+document.querySelectorAll('.handle').forEach(function(h) {
+  // الفأرة
+  h.addEventListener('mousedown', function(e) {
+    initDrag(e, this.dataset.handle);
+  });
+  // اللمس
+  h.addEventListener('touchstart', function(e) {
+    initDrag(e, this.dataset.handle);
+  }, {passive: false});
+});
+
+// أحداث عامة للسحب
+document.addEventListener('mousemove', moveDrag);
+document.addEventListener('touchmove', moveDrag, {passive: false});
+document.addEventListener('mouseup', endDrag);
+document.addEventListener('touchend', endDrag);
+document.addEventListener('touchcancel', endDrag);
+
+// ===== منطق الكاميرا والتصوير =====
+
 function stopStream(){
   try{if(state.stream&&state.stream.getTracks)state.stream.getTracks().forEach(function(t){try{t.stop();}catch(e){}});}catch(e){}
   state.stream=null;
 }
 
 function startCamera(){
-  frame.classList.add('hidden');
+  frame.classList.remove('hidden');
   captureBtn.disabled=true;
   setStatus('جاري تشغيل الكاميرا...');
   var md=navigator.mediaDevices;
@@ -98,33 +317,32 @@ function startCamera(){
       return (p&&p.then)?p.then(function(){return stream;}):stream;
     })
     .then(function(){
-      setStatus('الكاميرا تعمل — ضع المستند داخل الإطار ثم التقط.');
-      noteEl.textContent='حرّك الهاتف حتى يدخل الإيصال بالكامل داخل الحدود البيضاء.';
-      frame.classList.remove('hidden');
+      setStatus('اسحب الإطار لتحديد منطقة القص');
+      noteEl.textContent='اسحب النقاط الزرقاء لتحديد الإطار بدقة، ثم اضغط قص & التقاط.';
       captureBtn.disabled=false;
     })
     .catch(function(err){
       setStatus('تعذر الوصول إلى الكاميرا.');
-      noteEl.textContent='تحقق من منح إذن الكاميرا لهذا الموقع من إعدادات المتصفح، ثم أعد المحاولة.';
+      noteEl.textContent='تحقق من منح إذن الكاميرا لهذا الموقع.';
       throw err;
     });
 }
 
-// يحسب مستطيل المصدر (بإحداثيات الفيديو الفعلية) المطابق لمكان الإطار على الشاشة،
-// مع مراعاة أن الفيديو معروض بـ object-fit:cover (تكبير يملأ العنصر مع اقتصاص الزائد).
 function mapFrameToSource(){
   var vw=video.videoWidth,vh=video.videoHeight;
   if(!vw||!vh)return null;
   var vRect=video.getBoundingClientRect();
   var fRect=frame.getBoundingClientRect();
-  var elW=vRect.width,elH=vRect.height;
-  var scale=Math.max(elW/vw,elH/vh); // cover
+  if(!vRect.width||!vRect.height||!fRect.width||!fRect.height)return null;
+  var scale=Math.max(vRect.width/vw, vRect.height/vh);
   var dispW=vw*scale,dispH=vh*scale;
-  var offX=(elW-dispW)/2,offY=(elH-dispH)/2;
+  var offX=(vRect.width-dispW)/2, offY=(vRect.height-dispH)/2;
+  
   var x=(fRect.left-vRect.left-offX)/scale;
   var y=(fRect.top-vRect.top-offY)/scale;
   var w=fRect.width/scale;
   var h=fRect.height/scale;
+  
   if(x<0){w+=x;x=0;}
   if(y<0){h+=y;y=0;}
   if(x+w>vw)w=vw-x;
@@ -153,22 +371,21 @@ function captureInsideFrame(){
 function enterReview(dataUrl){
   state.reviewData=dataUrl;
   stopStream();
-  video.style.display='none';
-  frame.classList.add('hidden');
+  stage.classList.add('is-review');
   reviewImg.src=dataUrl;
-  reviewImg.style.display='block';
   captureBtn.textContent='✅ اعتماد الصورة';
-  switchBtn.textContent='إعادة التصوير';
+  switchBtn.textContent='📸 إعادة تصوير';
   setStatus('مراجعة الصورة المقصوصة');
-  noteEl.textContent='اعتمد الصورة لإرسالها، أو أعد التصوير لالتقاط أخرى.';
+  noteEl.textContent='اعتمد الصورة لإرسالها، أو أعد التصوير لضبط الإطار مجددًا.';
 }
 
 function backToLive(){
   state.reviewData=null;
-  video.style.display='block';
-  reviewImg.style.display='none';
-  captureBtn.textContent='📸 التقاط داخل الإطار';
-  switchBtn.textContent='تبديل الكاميرا';
+  stage.classList.remove('is-review');
+  reviewImg.src='';
+  captureBtn.textContent='📸 قص & التقاط';
+  switchBtn.textContent='🔄 تبديل';
+  frame.classList.remove('hidden');
   startCamera().catch(function(){});
 }
 
@@ -183,6 +400,7 @@ function sendToOpener(dataUrl){
   setTimeout(function(){try{window.close();}catch(e){}},250);
 }
 
+// ===== ربط الأزرار =====
 captureBtn.onclick=function(){
   if(state.reviewData){sendToOpener(state.reviewData);return;}
   captureInsideFrame();
@@ -198,6 +416,8 @@ closeBtn.onclick=function(){
   try{window.close();}catch(e){}
 };
 window.addEventListener('beforeunload',stopStream);
+
+// بدء الكاميرا
 startCamera().catch(function(){});
 </script>
 </body>
