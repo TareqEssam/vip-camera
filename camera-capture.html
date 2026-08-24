@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>تصوير الإيصال</title>
+<style>
+  :root{--primary:#4f46a5;--line:#e4e7ec}
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;background:#05070a;font-family:-apple-system,'Segoe UI',Tahoma,Arial,sans-serif}
+  .card{height:100dvh;display:flex;flex-direction:column;background:#05070a}
+  .head{padding:12px 14px;background:#fff;border-bottom:1px solid var(--line)}
+  .head strong{display:block;font-size:14px;color:#1d2433}
+  .head small{display:block;color:#667085;font-size:11px;margin-top:3px}
+  .stage{position:relative;flex:1;min-height:0;background:#05070a;overflow:hidden}
+  video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;z-index:1}
+  img.review{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000;display:none;z-index:2}
+  .shade{position:absolute;inset:0;z-index:2;pointer-events:none}
+  .frame{position:absolute;z-index:3;left:50%;top:50%;width:86%;aspect-ratio:4/3;height:auto;transform:translate(-50%,-50%);
+    border:3px solid rgba(255,255,255,.96);border-radius:14px;box-shadow:0 0 0 9999px rgba(0,0,0,.36);pointer-events:none}
+  .frame.hidden{display:none}
+  .frame span{position:absolute;width:28px;height:28px;border-color:#fff;border-style:solid}
+  .frame span:nth-child(1){top:-3px;right:-3px;border-width:4px 4px 0 0;border-radius:0 8px 0 0}
+  .frame span:nth-child(2){top:-3px;left:-3px;border-width:4px 0 0 4px;border-radius:8px 0 0 0}
+  .frame span:nth-child(3){bottom:-3px;right:-3px;border-width:0 4px 4px 0;border-radius:0 0 8px 0}
+  .frame span:nth-child(4){bottom:-3px;left:-3px;border-width:0 0 4px 4px;border-radius:0 0 0 8px}
+  .note{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);width:min(90%,560px);text-align:center;
+    background:rgba(0,0,0,.62);color:#fff;border-radius:12px;padding:9px 12px;font-size:11px;line-height:1.7;z-index:5}
+  .status{position:absolute;top:10px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.55);color:#fff;
+    font-size:11px;padding:6px 12px;border-radius:999px;z-index:5}
+  .actions{display:flex;gap:8px;padding:12px;background:#fff}
+  .btn{flex:1;border:none;border-radius:12px;padding:13px 10px;font-size:13px;font-weight:700;cursor:pointer}
+  .btn-primary{background:var(--primary);color:#fff}
+  .btn-secondary{background:#f2f3f8;color:#344054}
+  .btn:disabled{opacity:.55;pointer-events:none}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="head">
+    <strong>تصوير الإيصال داخل الإطار</strong>
+    <small>ضع المستند بالكامل داخل الإطار الأبيض ثم اضغط التقاط.</small>
+  </div>
+  <div class="stage" id="stage">
+    <video id="video" playsinline webkit-playsinline muted autoplay></video>
+    <img id="reviewImg" class="review" alt="مراجعة الصورة">
+    <div class="frame hidden" id="frame"><span></span><span></span><span></span><span></span></div>
+    <div class="status" id="status">جاري تشغيل الكاميرا...</div>
+    <div class="note" id="note">امنح إذن الكاميرا عند الطلب. الإطار يظهر بعد بدء البث مباشرة.</div>
+  </div>
+  <div class="actions">
+    <button type="button" class="btn btn-secondary" id="switchBtn">تبديل الكاميرا</button>
+    <button type="button" class="btn btn-secondary" id="closeBtn">إغلاق</button>
+    <button type="button" class="btn btn-primary" id="captureBtn" disabled>📸 التقاط داخل الإطار</button>
+  </div>
+</div>
+<script>
+// هذه الصفحة يجب استضافتها على نطاق HTTPS خارج Apps Script (GitHub Pages / Firebase Hosting / Netlify)
+// لأن getUserMedia محظور بنيويًا داخل الإطار المعزول الذي تقدّم منه Apps Script صفحات HtmlService.
+// المرجع الرسمي: https://developers.google.com/apps-script/guides/support/troubleshooting ("Permissions policy violation")
+var APP_TAG='sms-vip-camera';
+var state={stream:null,facing:'environment',reviewData:null};
+var video=document.getElementById('video');
+var frame=document.getElementById('frame');
+var stage=document.getElementById('stage');
+var statusEl=document.getElementById('status');
+var noteEl=document.getElementById('note');
+var reviewImg=document.getElementById('reviewImg');
+var captureBtn=document.getElementById('captureBtn');
+var switchBtn=document.getElementById('switchBtn');
+var closeBtn=document.getElementById('closeBtn');
+
+function setStatus(t){statusEl.textContent=t||'';}
+
+function stopStream(){
+  try{if(state.stream&&state.stream.getTracks)state.stream.getTracks().forEach(function(t){try{t.stop();}catch(e){}});}catch(e){}
+  state.stream=null;
+}
+
+function startCamera(){
+  frame.classList.add('hidden');
+  captureBtn.disabled=true;
+  setStatus('جاري تشغيل الكاميرا...');
+  var md=navigator.mediaDevices;
+  if(!md||typeof md.getUserMedia!=='function'){
+    setStatus('المتصفح لا يدعم الكاميرا هنا.');
+    return Promise.reject(new Error('NO_GUM'));
+  }
+  stopStream();
+  var constraints={audio:false,video:{facingMode:state.facing,width:{ideal:1280},height:{ideal:720}}};
+  return md.getUserMedia(constraints)
+    .catch(function(){return md.getUserMedia({audio:false,video:{facingMode:state.facing}});})
+    .catch(function(){return md.getUserMedia({audio:false,video:true});})
+    .then(function(stream){
+      state.stream=stream;
+      video.srcObject=stream;
+      var p=video.play();
+      return (p&&p.then)?p.then(function(){return stream;}):stream;
+    })
+    .then(function(){
+      setStatus('الكاميرا تعمل — ضع المستند داخل الإطار ثم التقط.');
+      noteEl.textContent='حرّك الهاتف حتى يدخل الإيصال بالكامل داخل الحدود البيضاء.';
+      frame.classList.remove('hidden');
+      captureBtn.disabled=false;
+    })
+    .catch(function(err){
+      setStatus('تعذر الوصول إلى الكاميرا.');
+      noteEl.textContent='تحقق من منح إذن الكاميرا لهذا الموقع من إعدادات المتصفح، ثم أعد المحاولة.';
+      throw err;
+    });
+}
+
+// يحسب مستطيل المصدر (بإحداثيات الفيديو الفعلية) المطابق لمكان الإطار على الشاشة،
+// مع مراعاة أن الفيديو معروض بـ object-fit:cover (تكبير يملأ العنصر مع اقتصاص الزائد).
+function mapFrameToSource(){
+  var vw=video.videoWidth,vh=video.videoHeight;
+  if(!vw||!vh)return null;
+  var vRect=video.getBoundingClientRect();
+  var fRect=frame.getBoundingClientRect();
+  var elW=vRect.width,elH=vRect.height;
+  var scale=Math.max(elW/vw,elH/vh); // cover
+  var dispW=vw*scale,dispH=vh*scale;
+  var offX=(elW-dispW)/2,offY=(elH-dispH)/2;
+  var x=(fRect.left-vRect.left-offX)/scale;
+  var y=(fRect.top-vRect.top-offY)/scale;
+  var w=fRect.width/scale;
+  var h=fRect.height/scale;
+  if(x<0){w+=x;x=0;}
+  if(y<0){h+=y;y=0;}
+  if(x+w>vw)w=vw-x;
+  if(y+h>vh)h=vh-y;
+  if(w<8||h<8)return null;
+  return {x:x,y:y,w:w,h:h};
+}
+
+function captureInsideFrame(){
+  var rect=mapFrameToSource();
+  if(!rect){setStatus('انتظر استقرار الصورة ثم حاول مجددًا.');return;}
+  var canvas=document.createElement('canvas');
+  var maxSide=1600;
+  var scale=Math.min(1,maxSide/Math.max(rect.w,rect.h));
+  canvas.width=Math.max(1,Math.round(rect.w*scale));
+  canvas.height=Math.max(1,Math.round(rect.h*scale));
+  var ctx=canvas.getContext('2d');
+  ctx.fillStyle='#fff';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.drawImage(video,rect.x,rect.y,rect.w,rect.h,0,0,canvas.width,canvas.height);
+  var data=canvas.toDataURL('image/jpeg',0.86);
+  if(data.length>2.4*1024*1024)data=canvas.toDataURL('image/jpeg',0.72);
+  enterReview(data);
+}
+
+function enterReview(dataUrl){
+  state.reviewData=dataUrl;
+  stopStream();
+  video.style.display='none';
+  frame.classList.add('hidden');
+  reviewImg.src=dataUrl;
+  reviewImg.style.display='block';
+  captureBtn.textContent='✅ اعتماد الصورة';
+  switchBtn.textContent='إعادة التصوير';
+  setStatus('مراجعة الصورة المقصوصة');
+  noteEl.textContent='اعتمد الصورة لإرسالها، أو أعد التصوير لالتقاط أخرى.';
+}
+
+function backToLive(){
+  state.reviewData=null;
+  video.style.display='block';
+  reviewImg.style.display='none';
+  captureBtn.textContent='📸 التقاط داخل الإطار';
+  switchBtn.textContent='تبديل الكاميرا';
+  startCamera().catch(function(){});
+}
+
+function sendToOpener(dataUrl){
+  var payload={app:APP_TAG,type:'receipt-photo',dataUrl:dataUrl};
+  try{
+    if(window.opener&&!window.opener.closed){
+      window.opener.postMessage(payload,'*');
+    }
+  }catch(e){}
+  setStatus('تم إرسال الصورة، يمكنك إغلاق هذه النافذة.');
+  setTimeout(function(){try{window.close();}catch(e){}},250);
+}
+
+captureBtn.onclick=function(){
+  if(state.reviewData){sendToOpener(state.reviewData);return;}
+  captureInsideFrame();
+};
+switchBtn.onclick=function(){
+  if(state.reviewData){backToLive();return;}
+  state.facing=(state.facing==='environment')?'user':'environment';
+  startCamera().catch(function(){});
+};
+closeBtn.onclick=function(){
+  stopStream();
+  try{if(window.opener)window.opener.postMessage({app:APP_TAG,type:'closed'},'*');}catch(e){}
+  try{window.close();}catch(e){}
+};
+window.addEventListener('beforeunload',stopStream);
+startCamera().catch(function(){});
+</script>
+</body>
+</html>
