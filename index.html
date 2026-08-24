@@ -2,622 +2,510 @@
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
-<title>تصوير الإيصال - كشف تلقائي</title>
-<!-- تحميل مكتبة OpenCV.js من المصدر الرسمي -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no, maximum-scale=1.0">
+<title>ماسح المستندات الاحترافي</title>
 <script async src="https://docs.opencv.org/4.9.0/opencv.js" onload="onOpenCvReady()" type="text/javascript"></script>
 <style>
-  :root{--primary:#4f46a5;--line:#e4e7ec;--success:#10b981;--danger:#ef4444;--warning:#f59e0b}
-  *{box-sizing:border-box; user-select:none; -webkit-touch-callout:none; -webkit-user-select:none;}
-  html,body{height:100%;margin:0;background:#05070a;font-family:-apple-system,'Segoe UI',Tahoma,Arial,sans-serif; overflow:hidden; touch-action:none;}
-  .card{height:100dvh;display:flex;flex-direction:column;background:#05070a}
-  .head{padding:12px 14px;background:#fff;border-bottom:1px solid var(--line); flex-shrink:0;}
-  .head strong{display:block;font-size:14px;color:#1d2433}
-  .head small{display:block;color:#667085;font-size:11px;margin-top:3px}
-
-  .stage{position:relative;flex:1;min-height:0;background:#05070a;overflow:hidden; touch-action:none;}
+  :root{
+    --primary:#6366f1; --line:#1e293b; --bg:#0f172a; --card:#020617;
+    --success:#10b981; --danger:#ef4444; --accent:#38bdf8;
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent; user-select:none; -webkit-user-select:none;}
+  html,body{height:100%;margin:0;background:var(--card);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Tahoma,sans-serif; overflow:hidden; touch-action:none;}
+  
+  .app{height:100dvh;display:flex;flex-direction:column;background:var(--card)}
+  
+  /* Stage & Camera */
+  .stage{position:relative;flex:1;min-height:0;background:#000;overflow:hidden; touch-action:none;}
   video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;z-index:1; pointer-events:none;}
   img.review{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000;display:none;z-index:2; pointer-events:auto;}
-
+  
+  /* Scanning Frame */
   .frame {
     position:absolute; z-index:3;
-    border:3px solid rgba(255,255,255,.95); border-radius:14px;
-    box-shadow:0 0 0 9999px rgba(0,0,0,.36);
-    pointer-events:none; touch-action:none;
-    min-width: 50px; min-height: 50px;
-    transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+    border: 2px solid rgba(255,255,255,0.9);
+    box-shadow: 0 0 0 9999px rgba(0,0,0,0.55), 0 0 20px rgba(56, 189, 248, 0.3);
+    pointer-events: none; touch-action: none;
+    transition: border-color 0.3s, box-shadow 0.3s;
+    border-radius: 4px;
   }
-  .frame.initial { width: 70%; height: 55%; top: 22.5%; left: 15%; }
-  .frame.hidden{display:none}
-
-  .handle {
-    position:absolute; width: 44px; height: 44px;
-    background: rgba(255, 255, 255, 0.95); border: 3px solid var(--primary); border-radius: 50%;
-    z-index:10; pointer-events:auto; touch-action:none;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.6);
-    display:flex; align-items:center; justify-content:center;
-    font-size:16px; font-weight:bold; color:var(--primary);
-    transition: transform 0.15s, background 0.15s;
+  .frame.detecting { border-color: var(--accent); box-shadow: 0 0 0 9999px rgba(0,0,0,0.55), 0 0 30px rgba(56, 189, 248, 0.6); }
+  .frame.locked { border-color: var(--success); box-shadow: 0 0 0 9999px rgba(0,0,0,0.55), 0 0 25px rgba(16, 185, 129, 0.5); }
+  
+  /* Corner Handles */
+  .corner {
+    position:absolute; width: 32px; height: 32px;
+    border: 4px solid #fff; z-index:10;
+    pointer-events:auto; touch-action:none;
+    transition: transform 0.15s, border-color 0.15s;
   }
-  .handle:active { transform: scale(1.2); background: #fff; }
-  .handle::before { content: ''; position:absolute; inset: -12px; border-radius: 50%; background: transparent; z-index:-1; }
+  .corner:active { transform: scale(1.3); border-color: var(--accent); }
+  .corner.tl { top:-2px; left:-2px; border-right:none; border-bottom:none; border-radius: 8px 0 0 0; }
+  .corner.tr { top:-2px; right:-2px; border-left:none; border-bottom:none; border-radius: 0 8px 0 0; }
+  .corner.br { bottom:-2px; right:-2px; border-left:none; border-top:none; border-radius: 0 0 8px 0; }
+  .corner.bl { bottom:-2px; left:-2px; border-right:none; border-top:none; border-radius: 0 0 0 8px; }
+  
+  /* Edge Handles (Invisible but functional for precise resizing) */
+  .edge { position:absolute; z-index:9; background:transparent; pointer-events:auto; touch-action:none;}
+  .edge.top { top:-15px; left:15px; right:15px; height:30px; cursor:ns-resize; }
+  .edge.bottom { bottom:-15px; left:15px; right:15px; height:30px; cursor:ns-resize; }
+  .edge.left { left:-15px; top:15px; bottom:15px; width:30px; cursor:ew-resize; }
+  .edge.right { right:-15px; top:15px; bottom:15px; width:30px; cursor:ew-resize; }
+  
+  .move-area { position:absolute; inset:0; z-index:8; pointer-events:auto; touch-action:none; cursor:grab; }
+  .move-area:active { cursor:grabbing; }
 
-  .handle-n { top: -22px; left: 50%; transform: translateX(-50%); cursor: ns-resize; }
-  .handle-s { bottom: -22px; left: 50%; transform: translateX(-50%); cursor: ns-resize; }
-  .handle-e { right: -22px; top: 50%; transform: translateY(-50%); cursor: ew-resize; }
-  .handle-w { left: -22px; top: 50%; transform: translateY(-50%); cursor: ew-resize; }
-  .handle-ne { top: -22px; right: -22px; cursor: nesw-resize; }
-  .handle-nw { top: -22px; left: -22px; cursor: nwse-resize; }
-  .handle-se { bottom: -22px; right: -22px; cursor: nwse-resize; }
-  .handle-sw { bottom: -22px; left: -22px; cursor: nesw-resize; }
-
-  .handle-move {
-    top: 50%; left: 50%; transform: translate(-50%, -50%);
-    width: 60px; height: 60px; background: rgba(79, 70, 165, 0.25);
-    border: 2px dashed rgba(255,255,255,0.9); cursor: grab;
-    font-size: 24px; color: #fff; backdrop-filter: blur(2px);
+  /* Status & Hints */
+  .hint-top {
+    position:absolute; top:calc(12px + var(--safe-top)); left:50%; transform:translateX(-50%);
+    background:rgba(15,23,42,0.8); color:#fff; font-size:12px; font-weight:500;
+    padding:8px 16px; border-radius:999px; z-index:15; backdrop-filter:blur(8px);
+    border: 1px solid rgba(255,255,255,0.1); pointer-events:none;
+    transition: opacity 0.3s, background 0.3s; white-space: nowrap;
   }
-  .handle-move:active { cursor: grabbing; transform: translate(-50%, -50%) scale(0.95); }
-  .handle-move::after { content: '⤡'; font-size: 28px; color: #fff; }
-
-  @media (max-width: 768px) {
-    .handle { width: 54px; height: 54px; border-width: 4px; }
-    .handle-n, .handle-s { top: -27px; }
-    .handle-e, .handle-w { right: -27px; left: -27px; }
-    .handle-ne, .handle-se { top: -27px; right: -27px; }
-    .handle-nw, .handle-sw { top: -27px; left: -27px; }
-    .handle-move { width: 72px; height: 72px; }
-    .handle::before { inset: -16px; }
+  .hint-top.success { background: rgba(16, 185, 129, 0.9); }
+  .hint-top.error { background: rgba(239, 68, 68, 0.9); }
+  
+  .hint-bottom {
+    position:absolute; left:50%; bottom:calc(20px + var(--safe-bottom)); transform:translateX(-50%);
+    width:min(90%, 500px); text-align:center; color:rgba(255,255,255,0.7);
+    font-size:13px; z-index:15; pointer-events:none;
   }
 
-  .status{position:absolute;top:10px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.7);color:#fff;font-size:12px;padding:8px 16px;border-radius:999px;z-index:15; white-space:nowrap; pointer-events:none; backdrop-filter:blur(4px);}
-  .note{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);width:min(90%,560px);text-align:center;background:rgba(0,0,0,.7);color:#fff;border-radius:12px;padding:10px 14px;font-size:12px;line-height:1.7;z-index:15; pointer-events:none; backdrop-filter:blur(4px);}
-
-  .actions{
-    display:flex; gap:6px; padding:10px 12px; background:#fff; flex-shrink:0; flex-wrap:wrap; align-items:center; justify-content:center;
+  /* Bottom Bar */
+  .controls-bar {
+    background: rgba(2, 6, 23, 0.95); backdrop-filter: blur(20px);
+    padding: 12px 16px calc(12px + var(--safe-bottom));
+    display: flex; justify-content: space-between; align-items: center; gap: 10px;
+    border-top: 1px solid rgba(255,255,255,0.05);
+    z-index: 20;
   }
-  .btn{
-    border:none; border-radius:12px; padding:12px 10px; font-size:12px; font-weight:700; cursor:pointer;
-    min-width:48px; flex:1 1 auto; transition: all 0.15s; white-space:nowrap;
+  .ctrl-btn {
+    background: transparent; border: none; color: #fff; cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    font-size: 11px; font-weight: 500; min-width: 50px; opacity: 0.8;
+    transition: transform 0.15s, opacity 0.15s;
   }
-  .btn:active { transform: scale(0.95); }
-  .btn-primary{background:var(--primary);color:#fff}
-  .btn-secondary{background:#f2f3f8;color:#344054}
-  .btn-zoom{background:#e0e7ff;color:#1e293b; flex:0.35; min-width:36px; padding:12px 4px;}
-  .btn-detect{background:var(--success);color:#fff; flex:0.8;}
-  .btn-detect.active{background:var(--warning);color:#fff;}
-  .btn:disabled{opacity:.5;pointer-events:none}
+  .ctrl-btn:active { transform: scale(0.92); opacity: 1; }
+  .ctrl-btn svg { width: 24px; height: 24px; stroke-width: 1.8; }
+  .ctrl-btn.primary svg { filter: drop-shadow(0 0 8px rgba(99, 102, 241, 0.8)); }
+  .ctrl-btn.primary { color: var(--primary); opacity: 1; }
+  .ctrl-btn.active { color: var(--accent); opacity: 1; }
+  .ctrl-btn.disabled { opacity: 0.3; pointer-events: none; }
 
-  .stage.is-review .frame, 
-  .stage.is-review .handle,
-  .stage.is-review .shade { display: none !important; }
-  .stage.is-review .review { display: block !important; }
-  .stage.is-review video { display: none !important; }
+  /* Scanning Animation */
+  .scan-line {
+    position: absolute; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    z-index: 11; box-shadow: 0 0 10px var(--accent);
+    display: none;
+  }
+  .frame.detecting .scan-line {
+    display: block; animation: scan 1.5s infinite linear;
+  }
+  @keyframes scan { 0% { top: 0; } 100% { top: 100%; } }
+
+  /* Review Mode Styles */
+  .app.is-review .frame, .app.is-review .scan-line, .app.is-review .move-area, .app.is-review .corner, .app.is-review .edge { display: none !important; }
+  .app.is-review .review { display: block !important; }
+  .app.is-review video { display: none !important; }
 </style>
-<base target="_blank">
 </head>
 <body>
-<div class="card">
-  <div class="head">
-    <strong>📄 ضبط تلقائي أو يدوي</strong>
-    <small>اضغط "كشف المستند" ليقفز الإطار على الورقة، أو فعّل الكشف المستمر.</small>
-  </div>
+<div class="app" id="app">
   <div class="stage" id="stage">
     <video id="video" playsinline webkit-playsinline muted autoplay></video>
-    <img id="reviewImg" class="review" alt="مراجعة الصورة">
+    <img id="reviewImg" class="review" alt="معاينة">
+    
     <div class="frame initial" id="frame">
-      <div class="handle handle-n" data-handle="n"></div>
-      <div class="handle handle-s" data-handle="s"></div>
-      <div class="handle handle-e" data-handle="e"></div>
-      <div class="handle handle-w" data-handle="w"></div>
-      <div class="handle handle-ne" data-handle="ne"></div>
-      <div class="handle handle-nw" data-handle="nw"></div>
-      <div class="handle handle-se" data-handle="se"></div>
-      <div class="handle handle-sw" data-handle="sw"></div>
-      <div class="handle handle-move" data-handle="move"></div>
+      <div class="scan-line"></div>
+      <div class="move-area" data-handle="move"></div>
+      <div class="edge top" data-handle="n"></div>
+      <div class="edge bottom" data-handle="s"></div>
+      <div class="edge left" data-handle="w"></div>
+      <div class="edge right" data-handle="e"></div>
+      <div class="corner tl" data-handle="nw"></div>
+      <div class="corner tr" data-handle="ne"></div>
+      <div class="corner br" data-handle="se"></div>
+      <div class="corner bl" data-handle="sw"></div>
     </div>
-    <div class="shade"></div>
-    <div class="status" id="status">جاري تشغيل الكاميرا...</div>
-    <div class="note" id="note">اسحب النقاط أو المنتصف، أو استخدم الكشف التلقائي.</div>
+    
+    <div class="hint-top" id="status">جاري تهيئة الكاميرا...</div>
+    <div class="hint-bottom" id="note">وجّه الكاميرا نحو المستند واضغط "كشف تلقائي"</div>
   </div>
 
-  <div class="actions">
-    <button type="button" class="btn btn-secondary" id="switchBtn">🔄 تبديل</button>
-    <button type="button" class="btn btn-secondary" id="resetBtn">↺ إعادة</button>
-    <button type="button" class="btn btn-detect" id="detectBtn">📐 كشف المستند</button>
-    <button type="button" class="btn btn-detect" id="autoDetectBtn">🔄 كشف مستمر</button>
-    <button type="button" class="btn btn-zoom" id="zoomOutBtn">➖</button>
-    <button type="button" class="btn btn-zoom" id="zoomInBtn">➕</button>
-    <button type="button" class="btn btn-primary" id="captureBtn" disabled>📸 قص</button>
-    <button type="button" class="btn btn-secondary" id="closeBtn">✖</button>
+  <div class="controls-bar">
+    <button type="button" class="ctrl-btn" id="closeBtn">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+      إغلاق
+    </button>
+    <button type="button" class="ctrl-btn" id="switchBtn">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M16 3l4 4-4 4M4 7h16M8 21l-4-4 4-4M20 17H4" /></svg>
+      تبديل
+    </button>
+    <button type="button" class="ctrl-btn primary" id="captureBtn">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+      قص
+    </button>
+    <button type="button" class="ctrl-btn" id="autoDetectBtn">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+      كشف تلقائي
+    </button>
+    <button type="button" class="ctrl-btn" id="resetBtn">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+      إعادة
+    </button>
   </div>
 </div>
-<script>
-// ===== الإعدادات =====
-var APP_TAG='sms-vip-camera';
-var state={
-  stream:null,
-  facing:'environment',
-  reviewData:null,
-  cvReady:false,
-  autoDetectInterval:null,
-  isAutoDetecting:false,
-  lastDetectTime:0
-};
-var video=document.getElementById('video');
-var frame=document.getElementById('frame');
-var stage=document.getElementById('stage');
-var statusEl=document.getElementById('status');
-var noteEl=document.getElementById('note');
-var reviewImg=document.getElementById('reviewImg');
-var captureBtn=document.getElementById('captureBtn');
-var switchBtn=document.getElementById('switchBtn');
-var closeBtn=document.getElementById('closeBtn');
-var resetBtn=document.getElementById('resetBtn');
-var detectBtn=document.getElementById('detectBtn');
-var autoDetectBtn=document.getElementById('autoDetectBtn');
 
-function setStatus(t){ statusEl.textContent=t||''; }
+<script>
+var APP_TAG = 'sms-vip-camera';
+var state = {
+  stream: null, facing: 'environment', reviewData: null,
+  cvReady: false, isAutoDetecting: false, isReview: false,
+  detectLoopId: null, lastDetectRect: null
+};
+
+var app = document.getElementById('app');
+var video = document.getElementById('video');
+var frame = document.getElementById('frame');
+var stage = document.getElementById('stage');
+var statusEl = document.getElementById('status');
+var noteEl = document.getElementById('note');
+var reviewImg = document.getElementById('reviewImg');
+var captureBtn = document.getElementById('captureBtn');
+var switchBtn = document.getElementById('switchBtn');
+var autoDetectBtn = document.getElementById('autoDetectBtn');
+
+function setStatus(t, type) { 
+  statusEl.textContent = t || ''; 
+  statusEl.className = 'hint-top ' + (type || '');
+}
 
 function onOpenCvReady() {
   state.cvReady = true;
-  setStatus('✅ OpenCV جاهز — يمكنك استخدام الكشف التلقائي');
-  detectBtn.disabled = false;
-  autoDetectBtn.disabled = false;
+  setStatus('✅ جاهز للكشف', 'success');
+  setTimeout(() => { if(!state.isAutoDetecting) setStatus('اضبط الإطار أو استخدم الكشف التلقائي'); }, 2000);
 }
 
-// ===== منطق السحب (Drag) =====
+// ===== Pointer Events Drag System =====
 var dragState = null;
-function getPos(e) {
-  if (e.touches) return { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY };
-  return { clientX: e.clientX, clientY: e.clientY };
-}
-function initDrag(e, handle) {
+function getPos(e) { return { x: e.clientX, y: e.clientY }; }
+
+function initDrag(e) {
   e.preventDefault();
+  var handle = e.target.dataset.handle;
+  if (!handle) return;
+  
   var rect = frame.getBoundingClientRect();
   var stageRect = stage.getBoundingClientRect();
-  var current = {
-    top: (rect.top - stageRect.top) / stageRect.height * 100,
-    left: (rect.left - stageRect.left) / stageRect.width * 100,
-    width: rect.width / stageRect.width * 100,
-    height: rect.height / stageRect.height * 100
-  };
-  var pos = getPos(e);
+  
   dragState = {
-    handle: handle, startX: pos.clientX, startY: pos.clientY,
-    startTop: current.top, startLeft: current.left,
-    startWidth: current.width, startHeight: current.height,
-    stageRect: stageRect, minSize: 10, maxSize: 95
+    handle: handle, startX: e.clientX, startY: e.clientY,
+    startLeft: (rect.left - stageRect.left) / stageRect.width * 100,
+    startTop: (rect.top - stageRect.top) / stageRect.height * 100,
+    startWidth: rect.width / stageRect.width * 100,
+    startHeight: rect.height / stageRect.height * 100,
+    stageRect: stageRect
   };
+  frame.style.transition = 'none';
 }
+
 function moveDrag(e) {
   if (!dragState) return;
   e.preventDefault();
-  var pos = getPos(e);
-  var dx = (pos.clientX - dragState.startX) / dragState.stageRect.width * 100;
-  var dy = (pos.clientY - dragState.startY) / dragState.stageRect.height * 100;
-  var newTop = dragState.startTop, newLeft = dragState.startLeft, newWidth = dragState.startWidth, newHeight = dragState.startHeight;
-  var min = dragState.minSize, max = dragState.maxSize;
+  var dx = (e.clientX - dragState.startX) / dragState.stageRect.width * 100;
+  var dy = (e.clientY - dragState.startY) / dragState.stageRect.height * 100;
+  var min = 15, max = 98;
+  
+  var l = dragState.startLeft, t = dragState.startTop, w = dragState.startWidth, h = dragState.startHeight;
   var h = dragState.handle;
 
-  if (h === 'move') {
-    newLeft = Math.max(0, Math.min(100 - newWidth, dragState.startLeft + dx));
-    newTop = Math.max(0, Math.min(100 - newHeight, dragState.startTop + dy));
-    applyFrame(newLeft, newTop, newWidth, newHeight); return;
-  }
-  if (h === 'se') { newWidth = Math.min(max, Math.max(min, dragState.startWidth + dx)); newHeight = Math.min(max, Math.max(min, dragState.startHeight + dy)); }
-  else if (h === 'nw') { newLeft = Math.min(dragState.startLeft + dragState.startWidth - min, Math.max(0, dragState.startLeft + dx)); newWidth = Math.min(max, Math.max(min, dragState.startWidth - dx)); newTop = Math.min(dragState.startTop + dragState.startHeight - min, Math.max(0, dragState.startTop + dy)); newHeight = Math.min(max, Math.max(min, dragState.startHeight - dy)); }
-  else if (h === 'ne') { newWidth = Math.min(max, Math.max(min, dragState.startWidth + dx)); newTop = Math.min(dragState.startTop + dragState.startHeight - min, Math.max(0, dragState.startTop + dy)); newHeight = Math.min(max, Math.max(min, dragState.startHeight - dy)); }
-  else if (h === 'sw') { newLeft = Math.min(dragState.startLeft + dragState.startWidth - min, Math.max(0, dragState.startLeft + dx)); newWidth = Math.min(max, Math.max(min, dragState.startWidth - dx)); newHeight = Math.min(max, Math.max(min, dragState.startHeight + dy)); }
-  else if (h === 'n') { newTop = Math.min(dragState.startTop + dragState.startHeight - min, Math.max(0, dragState.startTop + dy)); newHeight = Math.min(max, Math.max(min, dragState.startHeight - dy)); }
-  else if (h === 's') { newHeight = Math.min(max, Math.max(min, dragState.startHeight + dy)); }
-  else if (h === 'w') { newLeft = Math.min(dragState.startLeft + dragState.startWidth - min, Math.max(0, dragState.startLeft + dx)); newWidth = Math.min(max, Math.max(min, dragState.startWidth - dx)); }
-  else if (h === 'e') { newWidth = Math.min(max, Math.max(min, dragState.startWidth + dx)); }
+  if (h === 'move') { l += dx; t += dy; }
+  else if (h.includes('e')) w = Math.max(min, Math.min(max - l, dragState.startWidth + dx));
+  else if (h.includes('w')) { l = Math.max(0, Math.min(dragState.startLeft + dragState.startWidth - min, dragState.startLeft + dx)); w = dragState.startWidth - (l - dragState.startLeft); }
+  if (h.includes('s')) h_val = Math.max(min, Math.min(max - t, dragState.startHeight + dy));
+  else if (h.includes('n')) { t = Math.max(0, Math.min(dragState.startTop + dragState.startHeight - min, dragState.startTop + dy)); h = dragState.startHeight - (t - dragState.startTop); }
+  
+  // Bounds
+  if (l < 0) { w += l; l = 0; } if (t < 0) { h += t; t = 0; }
+  if (l + w > 100) w = 100 - l; if (t + h > 100) h = 100 - t;
+  if (w < 5 || h < 5) return; // prevent collapsing
 
-  if (newLeft + newWidth > 100) newWidth = 100 - newLeft;
-  if (newTop + newHeight > 100) newHeight = 100 - newTop;
-  applyFrame(newLeft, newTop, newWidth, newHeight);
+  applyFrame(l, t, w, h);
 }
-function endDrag(e) { dragState = null; }
+
+function endDrag() { 
+  if(dragState) frame.style.transition = ''; 
+  dragState = null; 
+}
+
+frame.addEventListener('pointerdown', initDrag);
+document.addEventListener('pointermove', moveDrag);
+document.addEventListener('pointerup', endDrag);
+document.addEventListener('pointercancel', endDrag);
+
 function applyFrame(left, top, width, height) {
   frame.style.left = left + '%'; frame.style.top = top + '%';
   frame.style.width = width + '%'; frame.style.height = height + '%';
   frame.classList.remove('initial');
+  frame.classList.remove('locked');
+  state.lastDetectRect = null; // Invalidate smoothed rect on manual move
 }
-document.querySelectorAll('.handle').forEach(function(h) {
-  h.addEventListener('mousedown', function(e) { initDrag(e, this.dataset.handle); });
-  h.addEventListener('touchstart', function(e) { initDrag(e, this.dataset.handle); }, {passive: false});
-});
-document.addEventListener('mousemove', moveDrag);
-document.addEventListener('touchmove', moveDrag, {passive: false});
-document.addEventListener('mouseup', endDrag);
-document.addEventListener('touchend', endDrag);
-document.addEventListener('touchcancel', endDrag);
 
-// ===== وظائف التكبير وإعادة الضبط =====
-function zoomIn() {
-  var rect = frame.getBoundingClientRect(), sr = stage.getBoundingClientRect();
-  var w = rect.width / sr.width * 100, h = rect.height / sr.height * 100, l = (rect.left - sr.left) / sr.width * 100, t = (rect.top - sr.top) / sr.height * 100;
-  var nw = Math.min(95, w * 1.08), nh = Math.min(95, h * 1.08);
-  var nl = Math.max(0, Math.min(100 - nw, l - (nw - w) / 2));
-  var nt = Math.max(0, Math.min(100 - nh, t - (nh - h) / 2));
-  applyFrame(nl, nt, nw, nh);
-}
-function zoomOut() {
-  var rect = frame.getBoundingClientRect(), sr = stage.getBoundingClientRect();
-  var w = rect.width / sr.width * 100, h = rect.height / sr.height * 100, l = (rect.left - sr.left) / sr.width * 100, t = (rect.top - sr.top) / sr.height * 100;
-  var nw = Math.max(12, w * 0.92), nh = Math.max(12, h * 0.92);
-  var nl = Math.max(0, Math.min(100 - nw, l + (w - nw) / 2));
-  var nt = Math.max(0, Math.min(100 - nh, t + (h - nh) / 2));
-  applyFrame(nl, nt, nw, nh);
-}
-function resetFrame() { applyFrame(15, 22.5, 70, 55); }
+function resetFrame() { applyFrame(15, 20, 70, 60); }
 
-// ===== كشف المستند التلقائي (محسّن بالكامل) =====
-function autoDetectDocument(silent) {
-  if (!state.cvReady || typeof cv === 'undefined') {
-    if (!silent) setStatus('⚠️ جاري تحميل مكتبة الكشف... انتظر لحظة.');
-    return;
-  }
-  if (!state.stream) {
-    if (!silent) setStatus('⚠️ الكاميرا غير نشطة.');
-    return;
-  }
-  if (state.reviewData) return;
+// ===== Advanced Document Detection =====
+function autoDetectDocument() {
+  if (!state.cvReady || !state.stream || state.isReview) return;
 
-  // منع التشغيل المتكرر السريع
-  var now = Date.now();
-  if (now - state.lastDetectTime < 500) return;
-  state.lastDetectTime = now;
+  var v = video;
+  if (!v.videoWidth) return;
+  
+  // Downscale for performance (max 400px width)
+  var scale = Math.min(1, 400 / v.videoWidth);
+  var w = Math.floor(v.videoWidth * scale);
+  var h = Math.floor(v.videoHeight * scale);
+  
+  var canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  var ctx = canvas.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(v, 0, 0, w, h);
 
-  if (!silent) {
-    setStatus('📐 جاري تحليل المستند...');
-    detectBtn.disabled = true;
-  }
-
-  var matsToClean = [];
-  function safeDelete(m) { if (m && typeof m.delete === 'function') { try { m.delete(); } catch(e){} } }
+  var mats = [];
+  function cleanMats() { mats.forEach(m => { try { m.delete(); } catch(e){} }); }
 
   try {
-    var v = video;
-    var canvas = document.createElement('canvas');
-    var vw = v.videoWidth || 1280;
-    var vh = v.videoHeight || 720;
-    canvas.width = vw;
-    canvas.height = vh;
-    var ctx = canvas.getContext('2d');
-    ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
-
-    // 1. استخراج بيانات الصورة بشكل موثوق
-    var imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    var src = cv.matFromImageData(imgData);
-    matsToClean.push(src);
-
+    var src = cv.matFromImageData(ctx.getImageData(0, 0, w, h));
+    mats.push(src);
+    
     var gray = new cv.Mat();
     cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
-    matsToClean.push(gray);
-
-    // 2. تحسين التباين باستخدام CLAHE
-    var clahe = new cv.CLAHE(2.0, new cv.Size(8, 8));
-    var enhanced = new cv.Mat();
-    clahe.apply(gray, enhanced);
-    clahe.delete();
-    matsToClean.push(enhanced);
-
-    // 3. تنعيم خفيف
-    var blurred = new cv.Mat();
-    cv.GaussianBlur(enhanced, blurred, new cv.Size(5, 5), 0);
-    matsToClean.push(blurred);
-
-    // 4. كشف الحواف Canny بعتبات متكيفة
-    var edges = new cv.Mat();
-    var medVal = cv.mean(blurred)[0];
-    var lowerThresh = Math.max(20, medVal * 0.25);
-    var upperThresh = Math.min(255, medVal * 1.5);
-    cv.Canny(blurred, edges, lowerThresh, upperThresh);
-    matsToClean.push(edges);
-
-    // 5. Morphology Close لإغلاق الفجوات
-    var kernel = cv.Mat.ones(5, 5, cv.CV_8U);
-    var closed = new cv.Mat();
-    cv.morphologyEx(edges, closed, cv.MORPH_CLOSE, kernel, new cv.Point(-1, -1), 2);
-    matsToClean.push(closed);
-    safeDelete(kernel);
-
-    // 6. إيجاد الكونتورات (RETR_LIST للحصول على كل الكونتورات)
+    mats.push(gray);
+    
+    // 1. Gaussian Blur to reduce noise
+    var blur = new cv.Mat();
+    cv.GaussianBlur(gray, blur, new cv.Size(5, 5), 0);
+    mats.push(blur);
+    
+    // 2. Canny Edge Detection (Robust against lighting)
+    var canny = new cv.Mat();
+    cv.Canny(blur, canny, 50, 150);
+    mats.push(canny);
+    
+    // 3. Morphological Closing to connect broken edges
+    var kernel = cv.Mat.ones(9, 9, cv.CV_8U);
+    var morph = new cv.Mat();
+    cv.morphologyEx(canny, morph, cv.MORPH_CLOSE, kernel);
+    mats.push(morph);
+    kernel.delete();
+    
+    // 4. Find Contours
     var contours = new cv.MatVector();
     var hierarchy = new cv.Mat();
-    cv.findContours(closed, contours, hierarchy, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE);
-    matsToClean.push(hierarchy);
+    cv.findContours(morph, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+    mats.push(contours, hierarchy);
 
-    var stageRect = stage.getBoundingClientRect();
-    var totalArea = canvas.width * canvas.height;
-    var minAreaPixels = totalArea * 0.025; // 2.5% فقط
-    var maxAreaPixels = totalArea * 0.95;
+    var maxArea = 0; var bestRect = null;
+    var imgArea = w * h;
 
-    var candidates = [];
-
-    // 7. البحث عن أفضل الكونتورات
     for (var i = 0; i < contours.size(); i++) {
       var cnt = contours.get(i);
       var area = cv.contourArea(cnt);
-
-      if (area < minAreaPixels || area > maxAreaPixels) continue;
-
-      var perimeter = cv.arcLength(cnt, true);
-      if (perimeter < 80) continue;
-
-      // تقريب الكونتور — تسامح أكبر (0.05)
+      if (area < imgArea * 0.05 || area > imgArea * 0.95) { cnt.delete(); continue; } // 5% to 95%
+      
+      var peri = cv.arcLength(cnt, true);
       var approx = new cv.Mat();
-      cv.approxPolyDP(cnt, approx, 0.05 * perimeter, true);
-      var numPoints = approx.rows;
-
-      // حساب النسبة الباعية
-      var rect = cv.boundingRect(approx);
-      var aspectRatio = rect.width / Math.max(rect.height, 1);
-      var isReasonableShape = (aspectRatio > 0.1 && aspectRatio < 8.0);
-
-      // تقييم الجودة
-      var shapeScore = 0;
-      if (numPoints >= 3 && numPoints <= 7) {
-        shapeScore = 1000 - Math.abs(numPoints - 4) * 150;
-      }
-
-      // تقييم إضافي: مدى "المستطيلية" (rectangularity)
-      var boundingArea = rect.width * rect.height;
-      var rectangularity = area / Math.max(boundingArea, 1);
-
-      if (shapeScore > 0 && isReasonableShape && rectangularity > 0.5) {
-        candidates.push({
-          area: area,
-          score: shapeScore + (area / totalArea) * 800 + rectangularity * 300,
-          approx: approx.clone(),
-          rect: rect,
-          numPoints: numPoints,
-          rectangularity: rectangularity
-        });
-      }
-      approx.delete();
-    }
-
-    // ترتيب المرشحين
-    candidates.sort(function(a, b) { return b.score - a.score; });
-
-    var bestRect = null;
-    var bestApprox = null;
-
-    if (candidates.length > 0) {
-      bestApprox = candidates[0].approx;
-      bestRect = candidates[0].rect;
-    } else {
-      // Fallback: أكبر كونتور عام
-      var largestArea = 0;
-      var largestContour = null;
-      for (var j = 0; j < contours.size(); j++) {
-        var c = contours.get(j);
-        var a = cv.contourArea(c);
-        if (a > largestArea && a > minAreaPixels) {
-          largestArea = a;
-          if (largestContour) largestContour.delete();
-          largestContour = c.clone();
+      cv.approxPolyDP(cnt, approx, 0.02 * peri, true);
+      
+      // Prioritize 4-point contours (Quadrilaterals)
+      if (approx.rows === 4) {
+        var rect = cv.boundingRect(approx);
+        var aspect = rect.width / rect.height;
+        // Filter extreme aspect ratios
+        if (aspect > 0.2 && aspect < 5.0 && area > maxArea) {
+          maxArea = area;
+          bestRect = rect;
         }
       }
-      if (largestContour) {
-        bestApprox = largestContour;
-        bestRect = cv.boundingRect(bestApprox);
+      approx.delete();
+      cnt.delete();
+    }
+
+    if (bestRect) {
+      // Convert to stage percentages
+      var sRect = stage.getBoundingClientRect();
+      var dispScale = Math.max(sRect.width / v.videoWidth, sRect.height / v.videoHeight);
+      var dispW = v.videoWidth * dispScale;
+      var dispH = v.videoHeight * dispScale;
+      var offX = (sRect.width - dispW) / 2;
+      var offY = (sRect.height - dispH) / 2;
+
+      var tx = ((bestRect.x / scale) * dispScale + offX) / sRect.width * 100;
+      var ty = ((bestRect.y / scale) * dispScale + offY) / sRect.height * 100;
+      var tw = ((bestRect.width / scale) * dispScale) / sRect.width * 100;
+      var th = ((bestRect.height / scale) * dispScale) / sRect.height * 100;
+
+      // Add 2% padding to ensure edges are included
+      var pad = 1.5;
+      tx = Math.max(0, tx - pad); ty = Math.max(0, ty - pad);
+      tw = Math.min(100 - tx, tw + pad * 2); th = Math.min(100 - ty, th + pad * 2);
+
+      // Smoothing (Lerp) to prevent jitter
+      var target = { l: tx, t: ty, w: tw, h: th };
+      if (!state.lastDetectRect) state.lastDetectRect = target;
+      
+      var smoothFactor = state.isAutoDetecting ? 0.2 : 1.0; // Smooth only in auto mode
+      var smoothRect = {
+        l: state.lastDetectRect.l + (target.l - state.lastDetectRect.l) * smoothFactor,
+        t: state.lastDetectRect.t + (target.t - state.lastDetectRect.t) * smoothFactor,
+        w: state.lastDetectRect.w + (target.w - state.lastDetectRect.w) * smoothFactor,
+        h: state.lastDetectRect.h + (target.h - state.lastDetectRect.h) * smoothFactor
+      };
+      
+      applyFrame(smoothRect.l, smoothRect.t, smoothRect.w, smoothRect.h);
+      state.lastDetectRect = smoothRect;
+      
+      if(!state.isAutoDetecting) {
+        frame.classList.add('locked');
+        setStatus('✅ تم القبض على المستند', 'success');
       }
+    } else {
+      if(!state.isAutoDetecting) setStatus('لم يتم العثور على مستند', 'error');
     }
-
-    // تنظيف
-    for (var k = 0; k < candidates.length; k++) {
-      safeDelete(candidates[k].approx);
-    }
-    safeDelete(contours);
-    for (var m = 0; m < matsToClean.length; m++) {
-      safeDelete(matsToClean[m]);
-    }
-    if (bestApprox && bestApprox !== candidates[0]?.approx) {
-      safeDelete(bestApprox);
-    }
-
-    if (!bestRect) {
-      if (!silent) {
-        setStatus('❌ لم يتم العثور على مستند واضح. جرب تقريب الكاميرا أو تحسين الإضاءة.');
-        detectBtn.disabled = false;
-      }
-      return;
-    }
-
-    // 8. تحويل الإحداثيات إلى نسب مئوية
-    var scaleCover = Math.max(stageRect.width / vw, stageRect.height / vh);
-    var dispW = vw * scaleCover;
-    var dispH = vh * scaleCover;
-    var offX = (stageRect.width - dispW) / 2;
-    var offY = (stageRect.height - dispH) / 2;
-
-    var leftP = ((bestRect.x * scaleCover) + offX) / stageRect.width * 100;
-    var topP = ((bestRect.y * scaleCover) + offY) / stageRect.height * 100;
-    var widthP = (bestRect.width * scaleCover) / stageRect.width * 100;
-    var heightP = (bestRect.height * scaleCover) / stageRect.height * 100;
-
-    // هامش صغير
-    var margin = 2.0;
-    leftP = Math.max(0, leftP - margin);
-    topP = Math.max(0, topP - margin);
-    widthP = Math.min(100 - leftP, widthP + (margin * 2));
-    heightP = Math.min(100 - topP, heightP + (margin * 2));
-
-    if (widthP < 8 || heightP < 8) {
-      if (!silent) {
-        setStatus('⚠️ المستند صغير جداً. قرب الهاتف قليلاً.');
-        detectBtn.disabled = false;
-      }
-      return;
-    }
-
-    // تطبيق الإطار
-    applyFrame(leftP, topP, widthP, heightP);
-    if (!silent) {
-      setStatus('✅ تم ضبط الإطار! عدّل يدوياً إن لزم.');
-      noteEl.textContent = 'الإطار تم ضبطه تلقائياً. استخدم المقابض للدقة المطلقة.';
-    }
-
   } catch (err) {
-    if (!silent) {
-      setStatus('⚠️ خطأ في الكشف: ' + (err.message || err));
-      console.error(err);
-    }
+    console.error(err);
+    if(!state.isAutoDetecting) setStatus('خطأ في المعالجة', 'error');
+  } finally {
+    cleanMats();
   }
-  if (!silent) detectBtn.disabled = false;
 }
 
-// ===== الكشف التلقائي المستمر =====
+// ===== Auto Detect Loop =====
 function toggleAutoDetect() {
   if (state.isAutoDetecting) {
-    // إيقاف
-    if (state.autoDetectInterval) {
-      clearInterval(state.autoDetectInterval);
-      state.autoDetectInterval = null;
-    }
+    cancelAnimationFrame(state.detectLoopId);
     state.isAutoDetecting = false;
     autoDetectBtn.classList.remove('active');
-    autoDetectBtn.textContent = '🔄 كشف مستمر';
-    setStatus('تم إيقاف الكشف المستمر');
+    frame.classList.remove('detecting');
+    setStatus('تم إيقاف الكشف التلقائي');
   } else {
-    // تشغيل
-    if (!state.cvReady) {
-      setStatus('⚠️ OpenCV لم يُحمل بعد. انتظر قليلاً...');
-      return;
-    }
+    if (!state.cvReady) { setStatus('OpenCV لم يُحمل بعد', 'error'); return; }
     state.isAutoDetecting = true;
     autoDetectBtn.classList.add('active');
-    autoDetectBtn.textContent = '⏹ إيقاف الكشف';
-    setStatus('🔄 الكشف المستمر مفعّل — حرّك الهاتف فوق المستند');
-
-    // تشغيل فوراً ثم كل 800ms
-    autoDetectDocument(true);
-    state.autoDetectInterval = setInterval(function() {
-      if (!state.reviewData && state.stream && state.cvReady) {
-        autoDetectDocument(true);
-      }
-    }, 800);
+    frame.classList.add('detecting');
+    setStatus('🔍 جاري البحث عن المستند...');
+    
+    var loop = () => {
+      if (!state.isAutoDetecting) return;
+      if (!state.isReview && state.stream) autoDetectDocument();
+      state.detectLoopId = requestAnimationFrame(loop);
+    };
+    loop();
   }
 }
 
-// ===== منطق الكاميرا =====
-function stopStream(){
-  try{if(state.stream&&state.stream.getTracks)state.stream.getTracks().forEach(function(t){try{t.stop();}catch(e){}});}catch(e){}
-  state.stream=null;
-}
-function startCamera(){
-  frame.classList.remove('hidden');
-  captureBtn.disabled = true;
+// ===== Camera Logic =====
+function stopStream(){ if(state.stream) state.stream.getTracks().forEach(t => t.stop()); state.stream=null; }
+
+function startCamera() {
+  frame.classList.remove('hidden', 'locked');
   setStatus('جاري تشغيل الكاميرا...');
-  var md=navigator.mediaDevices;
-  if(!md||typeof md.getUserMedia!=='function'){ setStatus('المتصفح لا يدعم الكاميرا.'); return Promise.reject(new Error('NO_GUM')); }
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { setStatus('المتصفح لا يدعم الكاميرا', 'error'); return; }
   stopStream();
-  var constraints={audio:false,video:{facingMode:state.facing,width:{ideal:1280},height:{ideal:720}}};
-  return md.getUserMedia(constraints)
-    .catch(function(){return md.getUserMedia({audio:false,video:{facingMode:state.facing}});})
-    .catch(function(){return md.getUserMedia({audio:false,video:true});})
-    .then(function(stream){
-      state.stream=stream; video.srcObject=stream;
-      var p=video.play();
-      return (p&&p.then)?p.then(function(){return stream;}):stream;
+  var constraints = { audio:false, video: { facingMode: state.facing, width: {ideal: 1920}, height: {ideal: 1080} } };
+  
+  navigator.mediaDevices.getUserMedia(constraints)
+    .catch(() => navigator.mediaDevices.getUserMedia({audio:false, video:{facingMode: state.facing}}))
+    .then(stream => {
+      state.stream = stream; video.srcObject = stream;
+      return video.play();
     })
-    .then(function(){
-      setStatus('اضبط الإطار أو استخدم الكشف التلقائي');
-      noteEl.textContent='اسحب المنتصف لتحريكه، أو اضغط "كشف المستند" أو فعّل "كشف مستمر".';
-      captureBtn.disabled = false;
-      if (state.cvReady) {
-        detectBtn.disabled = false;
-        autoDetectBtn.disabled = false;
-      }
+    .then(() => {
+      setStatus('✅ الكاميرا جاهزة', 'success');
+      setTimeout(() => { if(!state.isAutoDetecting) setStatus('اضبط الإطار أو استخدم الكشف'); }, 2000);
     })
-    .catch(function(err){ setStatus('تعذر الوصول إلى الكاميرا.'); throw err; });
+    .catch(() => setStatus('تعذر الوصول للكاميرا', 'error'));
 }
 
-function mapFrameToSource(){
-  var vw=video.videoWidth,vh=video.videoHeight;
-  if(!vw||!vh)return null;
-  var vRect=video.getBoundingClientRect(), fRect=frame.getBoundingClientRect();
-  var scale=Math.max(vRect.width/vw, vRect.height/vh);
-  var dispW=vw*scale,dispH=vh*scale;
-  var offX=(vRect.width-dispW)/2, offY=(vRect.height-dispH)/2;
-  var x=(fRect.left-vRect.left-offX)/scale, y=(fRect.top-vRect.top-offY)/scale;
-  var w=fRect.width/scale, h=fRect.height/scale;
+function mapFrameToSource() {
+  var vw = video.videoWidth, vh = video.videoHeight;
+  if(!vw || !vh) return null;
+  var vRect = video.getBoundingClientRect(), fRect = frame.getBoundingClientRect();
+  var scale = Math.max(vRect.width/vw, vRect.height/vh);
+  var dispW = vw*scale, dispH = vh*scale;
+  var offX = (vRect.width-dispW)/2, offY = (vRect.height-dispH)/2;
+  var x = (fRect.left-vRect.left-offX)/scale, y = (fRect.top-vRect.top-offY)/scale;
+  var w = fRect.width/scale, h = fRect.height/scale;
+  // Bounds check
   if(x<0){w+=x;x=0;} if(y<0){h+=y;y=0;}
   if(x+w>vw)w=vw-x; if(y+h>vh)h=vh-y;
-  if(w<8||h<8)return null;
-  return {x:x,y:y,w:w,h:h};
+  if(w<10||h<10) return null;
+  return {x,y,w,h};
 }
 
-function captureInsideFrame(){
-  var rect=mapFrameToSource();
-  if(!rect){setStatus('انتظر استقرار الصورة ثم حاول.');return;}
-  var canvas=document.createElement('canvas');
-  var maxSide=1600, scale=Math.min(1,maxSide/Math.max(rect.w,rect.h));
-  canvas.width=Math.max(1,Math.round(rect.w*scale)); canvas.height=Math.max(1,Math.round(rect.h*scale));
-  var ctx=canvas.getContext('2d');
-  ctx.fillStyle='#fff'; ctx.fillRect(0,0,canvas.width,canvas.height);
-  ctx.drawImage(video,rect.x,rect.y,rect.w,rect.h,0,0,canvas.width,canvas.height);
-  var data=canvas.toDataURL('image/jpeg',0.86);
-  if(data.length>2.4*1024*1024)data=canvas.toDataURL('image/jpeg',0.72);
+function captureInsideFrame() {
+  var rect = mapFrameToSource();
+  if(!rect){ setStatus('انتظر استقرار الكاميرا', 'error'); return; }
+  var canvas = document.createElement('canvas');
+  var maxSide = 2000, scale = Math.min(1, maxSide/Math.max(rect.w, rect.h));
+  canvas.width = Math.round(rect.w*scale); canvas.height = Math.round(rect.h*scale);
+  var ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#fff'; ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.drawImage(video, rect.x, rect.y, rect.w, rect.h, 0, 0, canvas.width, canvas.height);
+  var data = canvas.toDataURL('image/jpeg', 0.9);
   enterReview(data);
 }
 
-function enterReview(dataUrl){
-  state.reviewData=dataUrl; stopStream();
-  // إيقاف الكشف المستمر عند المراجعة
+function enterReview(dataUrl) {
+  state.reviewData = dataUrl; state.isReview = true;
   if (state.isAutoDetecting) toggleAutoDetect();
-  stage.classList.add('is-review');
-  reviewImg.src=dataUrl;
-  captureBtn.textContent='✅ اعتماد'; switchBtn.textContent='📸 إعادة';
-  setStatus('مراجعة الصورة المقصوصة');
-  noteEl.textContent='اعتمد أو أعد التصوير.';
-}
-function backToLive(){
-  state.reviewData=null; stage.classList.remove('is-review'); reviewImg.src='';
-  captureBtn.textContent='📸 قص'; switchBtn.textContent='🔄 تبديل';
-  frame.classList.remove('hidden');
-  startCamera().catch(function(){});
-}
-function sendToOpener(dataUrl){
-  var payload={app:APP_TAG,type:'receipt-photo',dataUrl:dataUrl};
-  try{ if(window.opener&&!window.opener.closed) window.opener.postMessage(payload,'*'); }catch(e){}
-  setStatus('تم الإرسال، سيتم الإغلاق.');
-  setTimeout(function(){try{window.close();}catch(e){}},250);
+  app.classList.add('is-review');
+  reviewImg.src = dataUrl;
+  setStatus('معاينة الصورة', 'success');
+  noteEl.textContent = 'إذا كانت الصورة جيدة اضغط "اعتماد"، أو "إعادة" للتصوير مجدداً.';
+  captureBtn.querySelector('svg path').setAttribute('d', 'M5 13l4 4L19 7');
+  captureBtn.lastChild.textContent = 'اعتماد';
+  switchBtn.lastChild.textContent = 'إعادة';
 }
 
-// ===== ربط الأزرار =====
-captureBtn.onclick=function(){
-  if(state.reviewData){sendToOpener(state.reviewData);return;}
-  captureInsideFrame();
+function backToLive() {
+  state.reviewData = null; state.isReview = false;
+  app.classList.remove('is-review'); reviewImg.src='';
+  captureBtn.querySelector('svg path').setAttribute('d', 'M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z M15 13a3 3 0 11-6 0 3 3 0 016 0z');
+  captureBtn.lastChild.textContent = 'قص';
+  switchBtn.lastChild.textContent = 'تبديل';
+  startCamera();
+}
+
+function sendToOpener(dataUrl) {
+  var payload = {app: APP_TAG, type: 'receipt-photo', dataUrl: dataUrl};
+  try { if(window.opener && !window.opener.closed) window.opener.postMessage(payload, '*'); } catch(e){}
+  setStatus('تم الإرسال، سيتم الإغلاق', 'success');
+  setTimeout(() => { try { window.close(); } catch(e){} }, 300);
+}
+
+// ===== Event Bindings =====
+captureBtn.onclick = () => state.isReview ? sendToOpener(state.reviewData) : captureInsideFrame();
+switchBtn.onclick = () => {
+  if (state.isReview) { backToLive(); return; }
+  state.facing = state.facing === 'environment' ? 'user' : 'environment';
+  startCamera();
 };
-switchBtn.onclick=function(){
-  if(state.reviewData){backToLive();return;}
-  state.facing=(state.facing==='environment')?'user':'environment';
-  startCamera().catch(function(){});
-};
-closeBtn.onclick=function(){
+document.getElementById('closeBtn').onclick = () => {
   stopStream();
   if (state.isAutoDetecting) toggleAutoDetect();
-  try{if(window.opener)window.opener.postMessage({app:APP_TAG,type:'closed'},'*');}catch(e){}
-  try{window.close();}catch(e){}
+  try { window.opener.postMessage({app: APP_TAG, type: 'closed'}, '*'); } catch(e){}
+  try { window.close(); } catch(e){}
 };
-resetBtn.onclick=resetFrame;
-document.getElementById('zoomInBtn').onclick=zoomIn;
-document.getElementById('zoomOutBtn').onclick=zoomOut;
-detectBtn.onclick = function() { autoDetectDocument(false); };
+document.getElementById('resetBtn').onclick = resetFrame;
 autoDetectBtn.onclick = toggleAutoDetect;
 
-window.addEventListener('beforeunload', function() {
-  stopStream();
-  if (state.autoDetectInterval) clearInterval(state.autoDetectInterval);
-});
-
+window.addEventListener('beforeunload', () => { stopStream(); });
 resetFrame();
-startCamera().catch(function(){});
+startCamera();
 </script>
 </body>
 </html>
