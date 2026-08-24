@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
-<title>تصوير الإيصال - إطار قابل للسحب</title>
+<title>تصوير الإيصال - تحكم سهل</title>
 <style>
   :root{--primary:#4f46a5;--line:#e4e7ec}
   *{box-sizing:border-box; user-select:none; -webkit-touch-callout:none; -webkit-user-select:none;}
@@ -12,90 +12,135 @@
   .head{padding:12px 14px;background:#fff;border-bottom:1px solid var(--line); flex-shrink:0;}
   .head strong{display:block;font-size:14px;color:#1d2433}
   .head small{display:block;color:#667085;font-size:11px;margin-top:3px}
+  
   .stage{position:relative;flex:1;min-height:0;background:#05070a;overflow:hidden; touch-action:none;}
   video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;z-index:1; pointer-events:none;}
   img.review{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000;display:none;z-index:2; pointer-events:auto;}
-  .shade{position:absolute;inset:0;z-index:2;pointer-events:none}
   
-  /* --- الإطار الرئيسي (قابل للسحب والتوسيع) --- */
+  /* --- الإطار الرئيسي --- */
   .frame {
     position:absolute;
     z-index:3;
     border:3px solid rgba(255,255,255,.95);
     border-radius:14px;
     box-shadow:0 0 0 9999px rgba(0,0,0,.36);
-    pointer-events:none; /* الإطار نفسه لا يمنع اللمس، المقابض هي التي تعمل */
+    pointer-events:none;
     touch-action:none;
     transition: border-color 0.1s;
-    min-width: 60px;
-    min-height: 60px;
+    min-width: 50px;
+    min-height: 50px;
   }
-  /* إطار افتراضي في وسط الشاشة تقريبًا */
-  .frame.initial {
-    width: 70%;
-    height: 55%;
-    top: 22.5%;
-    left: 15%;
-  }
+  .frame.initial { width: 70%; height: 55%; top: 22.5%; left: 15%; }
   .frame.hidden{display:none}
   
-  /* --- زوايا الإطار الأربعة (مقابض السحب) --- */
+  /* --- المقابض (جميعها كبيرة ومناسبة للمس) --- */
   .handle {
     position:absolute;
-    width: 36px;
-    height: 36px;
-    background: rgba(255,255,255,0.95);
-    border: 2px solid var(--primary);
+    width: 44px;
+    height: 44px;
+    background: rgba(255, 255, 255, 0.95);
+    border: 3px solid var(--primary);
     border-radius: 50%;
     z-index:10;
     pointer-events:auto;
     touch-action:none;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+    box-shadow: 0 2px 10px rgba(0,0,0,0.6);
     display:flex;
     align-items:center;
     justify-content:center;
-    font-size:12px;
-    color:#333;
+    font-size:16px;
+    font-weight:bold;
+    color:var(--primary);
     transition: transform 0.15s, background 0.15s;
   }
-  .handle:active {
-    transform: scale(1.15);
-    background: #fff;
-  }
-  /* توزيع المقابض على الحواف */
-  .handle-n { top: -18px; left: 50%; transform: translateX(-50%); cursor: ns-resize; touch-action: none; }
-  .handle-s { bottom: -18px; left: 50%; transform: translateX(-50%); cursor: ns-resize; touch-action: none; }
-  .handle-e { right: -18px; top: 50%; transform: translateY(-50%); cursor: ew-resize; touch-action: none; }
-  .handle-w { left: -18px; top: 50%; transform: translateY(-50%); cursor: ew-resize; touch-action: none; }
-  .handle-ne { top: -18px; right: -18px; cursor: nesw-resize; touch-action: none; }
-  .handle-nw { top: -18px; left: -18px; cursor: nwse-resize; touch-action: none; }
-  .handle-se { bottom: -18px; right: -18px; cursor: nwse-resize; touch-action: none; }
-  .handle-sw { bottom: -18px; left: -18px; cursor: nesw-resize; touch-action: none; }
-
-  /* أيقونات صغيرة في المقابض (اختياري) */
-  .handle::after {
-    content: '';
-    display:block;
-    width: 10px;
-    height: 10px;
-    border: 2px solid var(--primary);
-    border-radius: 2px;
-    opacity: 0.6;
-  }
-  .handle-n::after, .handle-s::after { width: 14px; height: 4px; } /* خط أفقي */
-  .handle-e::after, .handle-w::after { width: 4px; height: 14px; } /* خط عمودي */
-  .handle-ne::after, .handle-nw::after, .handle-se::after, .handle-sw::after { width: 8px; height: 8px; background: var(--primary); opacity: 0.3; border: none; }
-
-  .status{position:absolute;top:10px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.65);color:#fff;font-size:11px;padding:6px 12px;border-radius:999px;z-index:15; white-space:nowrap; pointer-events:none;}
-  .note{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);width:min(90%,560px);text-align:center;background:rgba(0,0,0,.62);color:#fff;border-radius:12px;padding:9px 12px;font-size:11px;line-height:1.7;z-index:15; pointer-events:none;}
+  .handle:active { transform: scale(1.2); background: #fff; }
   
-  .actions{display:flex;gap:8px;padding:12px;background:#fff; flex-shrink:0; flex-wrap:wrap;}
-  .btn{flex:1;border:none;border-radius:12px;padding:13px 10px;font-size:13px;font-weight:700;cursor:pointer; min-width:60px;}
+  /* توزيع المقابض مع توسيع منطقة اللمس (باستخدام pseudo-element) */
+  .handle::before {
+    content: '';
+    position:absolute;
+    inset: -12px; /* مساحة لمس أكبر حول كل مقبض */
+    border-radius: 50%;
+    background: transparent;
+    z-index:-1;
+  }
+  
+  /* مواقع المقابض */
+  .handle-n { top: -22px; left: 50%; transform: translateX(-50%); cursor: ns-resize; }
+  .handle-s { bottom: -22px; left: 50%; transform: translateX(-50%); cursor: ns-resize; }
+  .handle-e { right: -22px; top: 50%; transform: translateY(-50%); cursor: ew-resize; }
+  .handle-w { left: -22px; top: 50%; transform: translateY(-50%); cursor: ew-resize; }
+  .handle-ne { top: -22px; right: -22px; cursor: nesw-resize; }
+  .handle-nw { top: -22px; left: -22px; cursor: nwse-resize; }
+  .handle-se { bottom: -22px; right: -22px; cursor: nwse-resize; }
+  .handle-sw { bottom: -22px; left: -22px; cursor: nesw-resize; }
+  
+  /* المقبض المركزي (للسحب الكامل) */
+  .handle-move {
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 60px;
+    height: 60px;
+    background: rgba(79, 70, 165, 0.2);
+    border: 2px dashed rgba(255,255,255,0.8);
+    cursor: grab;
+    font-size: 24px;
+    color: #fff;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.5);
+    backdrop-filter: blur(2px);
+  }
+  .handle-move:active { cursor: grabbing; transform: translate(-50%, -50%) scale(0.95); }
+  .handle-move::after {
+    content: '⤡';
+    font-size: 28px;
+    color: #fff;
+  }
+  
+  .handle-n::after, .handle-s::after { content: '▬'; font-size: 20px; color: var(--primary); }
+  .handle-e::after, .handle-w::after { content: '▬'; font-size: 20px; color: var(--primary); transform: rotate(90deg); }
+  .handle-ne::after, .handle-nw::after, .handle-se::after, .handle-sw::after { content: '▣'; font-size: 16px; color: var(--primary); }
+
+  /* تحسين للهواتف: جعل المقابض أكبر */
+  @media (max-width: 768px) {
+    .handle { width: 54px; height: 54px; border-width: 4px; }
+    .handle-n, .handle-s { top: -27px; }
+    .handle-e, .handle-w { right: -27px; left: -27px; }
+    .handle-ne, .handle-se { top: -27px; right: -27px; }
+    .handle-nw, .handle-sw { top: -27px; left: -27px; }
+    .handle-move { width: 72px; height: 72px; }
+    .handle::before { inset: -16px; } /* مساحة لمس أكبر */
+  }
+
+  .status{position:absolute;top:10px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.7);color:#fff;font-size:12px;padding:8px 16px;border-radius:999px;z-index:15; white-space:nowrap; pointer-events:none; backdrop-filter:blur(4px);}
+  .note{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);width:min(90%,560px);text-align:center;background:rgba(0,0,0,.7);color:#fff;border-radius:12px;padding:10px 14px;font-size:12px;line-height:1.7;z-index:15; pointer-events:none; backdrop-filter:blur(4px);}
+  
+  .actions{
+    display:flex;
+    gap:8px;
+    padding:12px;
+    background:#fff;
+    flex-shrink:0;
+    flex-wrap:wrap;
+    align-items:center;
+    justify-content:center;
+  }
+  .btn{
+    border:none;
+    border-radius:12px;
+    padding:12px 14px;
+    font-size:13px;
+    font-weight:700;
+    cursor:pointer;
+    min-width:60px;
+    flex:1 1 auto;
+    transition: all 0.15s;
+  }
+  .btn:active { transform: scale(0.95); }
   .btn-primary{background:var(--primary);color:#fff}
   .btn-secondary{background:#f2f3f8;color:#344054}
-  .btn:disabled{opacity:.55;pointer-events:none}
+  .btn-zoom{background:#e0e7ff;color:#1e293b; flex:0.5; min-width:50px; padding:12px 8px;}
+  .btn:disabled{opacity:.5;pointer-events:none}
 
-  /* وضع المراجعة (إخفاء الإطار والمقابض) */
   .stage.is-review .frame, 
   .stage.is-review .handle,
   .stage.is-review .shade {
@@ -103,28 +148,21 @@
   }
   .stage.is-review .review { display: block !important; }
   .stage.is-review video { display: none !important; }
-
-  @media (max-width:600px) {
-    .handle { width: 44px; height: 44px; } /* مساحة أكبر للأصابع */
-    .handle-n, .handle-s { top: -22px; }
-    .handle-e, .handle-w { right: -22px; left: -22px; }
-    .handle-ne, .handle-se { top: -22px; right: -22px; }
-    .handle-nw, .handle-sw { top: -22px; left: -22px; }
-  }
 </style>
 </head>
 <body>
 <div class="card">
   <div class="head">
-    <strong>📐 اسحب أي حافة لتعديل الإطار</strong>
-    <small>المس أي نقطة زرقاء واسحب لتغيير حجم وشكل منطقة القص.</small>
+    <strong>📱 اسحب الإطار بسهولة</strong>
+    <small>اسحب النقاط الزرقاء لتغيير الحجم، واسحب المنتصف لتحريكه.</small>
   </div>
   <div class="stage" id="stage">
     <video id="video" playsinline webkit-playsinline muted autoplay></video>
     <img id="reviewImg" class="review" alt="مراجعة الصورة">
     
-    <!-- الإطار مع 8 مقابض -->
+    <!-- الإطار مع المقابض -->
     <div class="frame initial" id="frame">
+      <!-- مقابض الحواف والزوايا -->
       <div class="handle handle-n" data-handle="n"></div>
       <div class="handle handle-s" data-handle="s"></div>
       <div class="handle handle-e" data-handle="e"></div>
@@ -133,20 +171,26 @@
       <div class="handle handle-nw" data-handle="nw"></div>
       <div class="handle handle-se" data-handle="se"></div>
       <div class="handle handle-sw" data-handle="sw"></div>
+      <!-- المقبض المركزي (للسحب الكامل) -->
+      <div class="handle handle-move" data-handle="move"></div>
     </div>
     
     <div class="shade"></div>
     <div class="status" id="status">جاري تشغيل الكاميرا...</div>
-    <div class="note" id="note">اسحب النقاط الزرقاء لتحديد منطقة الإيصال بدقة.</div>
+    <div class="note" id="note">اسحب النقاط الزرقاء أو المنتصف لتحديد المنطقة بدقة.</div>
   </div>
+  
   <div class="actions">
     <button type="button" class="btn btn-secondary" id="switchBtn">🔄 تبديل</button>
-    <button type="button" class="btn btn-secondary" id="closeBtn">✖ إغلاق</button>
-    <button type="button" class="btn btn-primary" id="captureBtn" disabled>📸 قص & التقاط</button>
+    <button type="button" class="btn btn-secondary" id="resetBtn">↺ إعادة ضبط</button>
+    <button type="button" class="btn btn-zoom" id="zoomOutBtn">➖</button>
+    <button type="button" class="btn btn-zoom" id="zoomInBtn">➕</button>
+    <button type="button" class="btn btn-primary" id="captureBtn" disabled>📸 قص</button>
+    <button type="button" class="btn btn-secondary" id="closeBtn">✖</button>
   </div>
 </div>
 <script>
-// ===== إعدادات الكاميرا =====
+// ===== الإعدادات الأساسية =====
 var APP_TAG='sms-vip-camera';
 var state={stream:null,facing:'environment',reviewData:null};
 var video=document.getElementById('video');
@@ -158,10 +202,11 @@ var reviewImg=document.getElementById('reviewImg');
 var captureBtn=document.getElementById('captureBtn');
 var switchBtn=document.getElementById('switchBtn');
 var closeBtn=document.getElementById('closeBtn');
+var resetBtn=document.getElementById('resetBtn');
 
 function setStatus(t){statusEl.textContent=t||'';}
 
-// ===== منطق سحب الإطار (Drag to Resize) =====
+// ===== منطق السحب (بما في ذلك السحب الكامل من المنتصف) =====
 var dragState = null;
 
 function getPos(e) {
@@ -175,16 +220,13 @@ function initDrag(e, handle) {
   e.preventDefault();
   var rect = frame.getBoundingClientRect();
   var stageRect = stage.getBoundingClientRect();
-  // نأخذ القيم الحالية كنسبة مئوية بالنسبة للحاوية (stage)
   var current = {
     top: (rect.top - stageRect.top) / stageRect.height * 100,
     left: (rect.left - stageRect.left) / stageRect.width * 100,
     width: rect.width / stageRect.width * 100,
     height: rect.height / stageRect.height * 100
   };
-  // نمنع الخروج عن الحواف + حد أدنى
-  var minSize = 12; // 12% من حجم الحاوية تقريبًا كحد أدنى
-  
+  var minSize = 10; // حد أدنى 10%
   var pos = getPos(e);
   dragState = {
     handle: handle,
@@ -195,7 +237,8 @@ function initDrag(e, handle) {
     startWidth: current.width,
     startHeight: current.height,
     stageRect: stageRect,
-    minSize: minSize
+    minSize: minSize,
+    maxSize: 95
   };
 }
 
@@ -211,57 +254,58 @@ function moveDrag(e) {
   var newWidth = dragState.startWidth;
   var newHeight = dragState.startHeight;
   var min = dragState.minSize;
-  var maxW = 95, maxH = 95; // ألا يزيد عن 95% من الحاوية
-  
+  var max = dragState.maxSize;
   var h = dragState.handle;
-  
-  // الزوايا الأربع
+
+  // --- حالة خاصة: السحب الكامل من المنتصف (Move) ---
+  if (h === 'move') {
+    newLeft = Math.max(0, Math.min(100 - newWidth, dragState.startLeft + dx));
+    newTop = Math.max(0, Math.min(100 - newHeight, dragState.startTop + dy));
+    applyFrame(newLeft, newTop, newWidth, newHeight);
+    return;
+  }
+
+  // --- باقي المقابض (تغيير الحجم) ---
   if (h === 'se') {
-    newWidth = Math.min(maxW, Math.max(min, dragState.startWidth + dx));
-    newHeight = Math.min(maxH, Math.max(min, dragState.startHeight + dy));
+    newWidth = Math.min(max, Math.max(min, dragState.startWidth + dx));
+    newHeight = Math.min(max, Math.max(min, dragState.startHeight + dy));
   }
   else if (h === 'nw') {
     newLeft = Math.min(dragState.startLeft + dragState.startWidth - min, Math.max(0, dragState.startLeft + dx));
-    newWidth = Math.min(maxW, Math.max(min, dragState.startWidth - dx));
+    newWidth = Math.min(max, Math.max(min, dragState.startWidth - dx));
     newTop = Math.min(dragState.startTop + dragState.startHeight - min, Math.max(0, dragState.startTop + dy));
-    newHeight = Math.min(maxH, Math.max(min, dragState.startHeight - dy));
+    newHeight = Math.min(max, Math.max(min, dragState.startHeight - dy));
   }
   else if (h === 'ne') {
-    newWidth = Math.min(maxW, Math.max(min, dragState.startWidth + dx));
+    newWidth = Math.min(max, Math.max(min, dragState.startWidth + dx));
     newTop = Math.min(dragState.startTop + dragState.startHeight - min, Math.max(0, dragState.startTop + dy));
-    newHeight = Math.min(maxH, Math.max(min, dragState.startHeight - dy));
+    newHeight = Math.min(max, Math.max(min, dragState.startHeight - dy));
   }
   else if (h === 'sw') {
     newLeft = Math.min(dragState.startLeft + dragState.startWidth - min, Math.max(0, dragState.startLeft + dx));
-    newWidth = Math.min(maxW, Math.max(min, dragState.startWidth - dx));
-    newHeight = Math.min(maxH, Math.max(min, dragState.startHeight + dy));
+    newWidth = Math.min(max, Math.max(min, dragState.startWidth - dx));
+    newHeight = Math.min(max, Math.max(min, dragState.startHeight + dy));
   }
-  // الحواف الأربعة
   else if (h === 'n') {
     newTop = Math.min(dragState.startTop + dragState.startHeight - min, Math.max(0, dragState.startTop + dy));
-    newHeight = Math.min(maxH, Math.max(min, dragState.startHeight - dy));
+    newHeight = Math.min(max, Math.max(min, dragState.startHeight - dy));
   }
   else if (h === 's') {
-    newHeight = Math.min(maxH, Math.max(min, dragState.startHeight + dy));
+    newHeight = Math.min(max, Math.max(min, dragState.startHeight + dy));
   }
   else if (h === 'w') {
     newLeft = Math.min(dragState.startLeft + dragState.startWidth - min, Math.max(0, dragState.startLeft + dx));
-    newWidth = Math.min(maxW, Math.max(min, dragState.startWidth - dx));
+    newWidth = Math.min(max, Math.max(min, dragState.startWidth - dx));
   }
   else if (h === 'e') {
-    newWidth = Math.min(maxW, Math.max(min, dragState.startWidth + dx));
+    newWidth = Math.min(max, Math.max(min, dragState.startWidth + dx));
   }
+
+  // منع الخروج عن الحواف
+  if (newLeft + newWidth > 100) newWidth = 100 - newLeft;
+  if (newTop + newHeight > 100) newHeight = 100 - newTop;
   
-  // التأكد من أن العرض والارتفاع لا يتجاوزان الحاوية بالكامل
-  if (newLeft + newWidth > 100) { newWidth = 100 - newLeft; }
-  if (newTop + newHeight > 100) { newHeight = 100 - newTop; }
-  
-  // تطبيق القيم
-  frame.style.top = newTop + '%';
-  frame.style.left = newLeft + '%';
-  frame.style.width = newWidth + '%';
-  frame.style.height = newHeight + '%';
-  frame.classList.remove('initial');
+  applyFrame(newLeft, newTop, newWidth, newHeight);
 }
 
 function endDrag(e) {
@@ -270,27 +314,71 @@ function endDrag(e) {
   }
 }
 
-// ربط الأحداث بالمقابض
+function applyFrame(left, top, width, height) {
+  frame.style.left = left + '%';
+  frame.style.top = top + '%';
+  frame.style.width = width + '%';
+  frame.style.height = height + '%';
+  frame.classList.remove('initial');
+}
+
+// ===== وظائف التكبير والتصغير وإعادة الضبط =====
+function zoomIn() {
+  var rect = frame.getBoundingClientRect();
+  var stageRect = stage.getBoundingClientRect();
+  var w = rect.width / stageRect.width * 100;
+  var h = rect.height / stageRect.height * 100;
+  var l = (rect.left - stageRect.left) / stageRect.width * 100;
+  var t = (rect.top - stageRect.top) / stageRect.height * 100;
+  
+  var newW = Math.min(95, w * 1.08);
+  var newH = Math.min(95, h * 1.08);
+  var newL = l - (newW - w) / 2;
+  var newT = t - (newH - h) / 2;
+  
+  // منع الخروج
+  newL = Math.max(0, Math.min(100 - newW, newL));
+  newT = Math.max(0, Math.min(100 - newH, newT));
+  
+  applyFrame(newL, newT, newW, newH);
+}
+
+function zoomOut() {
+  var rect = frame.getBoundingClientRect();
+  var stageRect = stage.getBoundingClientRect();
+  var w = rect.width / stageRect.width * 100;
+  var h = rect.height / stageRect.height * 100;
+  var l = (rect.left - stageRect.left) / stageRect.width * 100;
+  var t = (rect.top - stageRect.top) / stageRect.height * 100;
+  
+  var newW = Math.max(12, w * 0.92);
+  var newH = Math.max(12, h * 0.92);
+  var newL = l + (w - newW) / 2;
+  var newT = t + (h - newH) / 2;
+  
+  newL = Math.max(0, Math.min(100 - newW, newL));
+  newT = Math.max(0, Math.min(100 - newH, newT));
+  
+  applyFrame(newL, newT, newW, newH);
+}
+
+function resetFrame() {
+  applyFrame(15, 22.5, 70, 55);
+}
+
+// ربط أحداث السحب بالمقابض
 document.querySelectorAll('.handle').forEach(function(h) {
-  // الفأرة
-  h.addEventListener('mousedown', function(e) {
-    initDrag(e, this.dataset.handle);
-  });
-  // اللمس
-  h.addEventListener('touchstart', function(e) {
-    initDrag(e, this.dataset.handle);
-  }, {passive: false});
+  h.addEventListener('mousedown', function(e) { initDrag(e, this.dataset.handle); });
+  h.addEventListener('touchstart', function(e) { initDrag(e, this.dataset.handle); }, {passive: false});
 });
 
-// أحداث عامة للسحب
 document.addEventListener('mousemove', moveDrag);
 document.addEventListener('touchmove', moveDrag, {passive: false});
 document.addEventListener('mouseup', endDrag);
 document.addEventListener('touchend', endDrag);
 document.addEventListener('touchcancel', endDrag);
 
-// ===== منطق الكاميرا والتصوير =====
-
+// ===== منطق الكاميرا =====
 function stopStream(){
   try{if(state.stream&&state.stream.getTracks)state.stream.getTracks().forEach(function(t){try{t.stop();}catch(e){}});}catch(e){}
   state.stream=null;
@@ -317,8 +405,8 @@ function startCamera(){
       return (p&&p.then)?p.then(function(){return stream;}):stream;
     })
     .then(function(){
-      setStatus('اسحب الإطار لتحديد منطقة القص');
-      noteEl.textContent='اسحب النقاط الزرقاء لتحديد الإطار بدقة، ثم اضغط قص & التقاط.';
+      setStatus('اضبط الإطار ثم اضغط قص');
+      noteEl.textContent='اسحب المنتصف لتحريك الإطار، واستخدم + و - لتغيير الحجم بسهولة.';
       captureBtn.disabled=false;
     })
     .catch(function(err){
@@ -373,8 +461,8 @@ function enterReview(dataUrl){
   stopStream();
   stage.classList.add('is-review');
   reviewImg.src=dataUrl;
-  captureBtn.textContent='✅ اعتماد الصورة';
-  switchBtn.textContent='📸 إعادة تصوير';
+  captureBtn.textContent='✅ اعتماد';
+  switchBtn.textContent='📸 إعادة';
   setStatus('مراجعة الصورة المقصوصة');
   noteEl.textContent='اعتمد الصورة لإرسالها، أو أعد التصوير لضبط الإطار مجددًا.';
 }
@@ -383,7 +471,7 @@ function backToLive(){
   state.reviewData=null;
   stage.classList.remove('is-review');
   reviewImg.src='';
-  captureBtn.textContent='📸 قص & التقاط';
+  captureBtn.textContent='📸 قص';
   switchBtn.textContent='🔄 تبديل';
   frame.classList.remove('hidden');
   startCamera().catch(function(){});
@@ -415,9 +503,12 @@ closeBtn.onclick=function(){
   try{if(window.opener)window.opener.postMessage({app:APP_TAG,type:'closed'},'*');}catch(e){}
   try{window.close();}catch(e){}
 };
-window.addEventListener('beforeunload',stopStream);
+resetBtn.onclick=resetFrame;
+document.getElementById('zoomInBtn').onclick=zoomIn;
+document.getElementById('zoomOutBtn').onclick=zoomOut;
 
-// بدء الكاميرا
+window.addEventListener('beforeunload',stopStream);
+resetFrame(); // ضبط الإطار في المنتصف
 startCamera().catch(function(){});
 </script>
 </body>
